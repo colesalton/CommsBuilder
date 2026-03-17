@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Worker Query Builder</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      padding: 32px 16px 48px; gap: 20px;
+    }
+    .card {
+      background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.09);
+      width: 100%; max-width: 620px; padding: 36px 40px 32px;
+    }
+    .card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+    .icon {
+      width: 44px; height: 44px; background: #2563eb; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .icon svg { width: 22px; height: 22px; }
+    .card-header h1 { font-size: 1.2rem; font-weight: 700; color: #111827; }
+    .card-header p { font-size: 0.82rem; color: #6b7280; margin-top: 2px; }
+
+    /* Source tabs */
+    .source-section { margin-bottom: 24px; }
+    .source-tabs { display: flex; border-radius: 10px 10px 0 0; overflow: hidden; border: 1.5px solid #e5e7eb; border-bottom: none; }
+    .src-tab {
+      flex: 1; padding: 10px 14px; border: none; background: #f1f5f9;
+      font-size: 0.88rem; font-weight: 600; color: #6b7280;
+      cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .src-tab.active { background: #2563eb; color: #fff; }
+    .src-tab:not(.active):hover { background: #e2e8f0; color: #374151; }
+    .src-panel { border: 1.5px solid #e5e7eb; border-radius: 0 0 10px 10px; padding: 20px; background: #f9fafb; }
+    .live-desc { font-size: 0.84rem; color: #6b7280; margin-bottom: 16px; line-height: 1.55; }
+    .btn-google {
+      display: flex; align-items: center; gap: 10px; justify-content: center;
+      width: 100%; padding: 11px 16px; border: 1.5px solid #dadce0; border-radius: 8px;
+      background: #fff; color: #3c4043; font-size: 0.92rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .btn-google:hover { border-color: #4285f4; box-shadow: 0 2px 8px rgba(66,133,244,0.18); }
+    .connected-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+    .connected-badge { display: flex; align-items: center; gap: 7px; font-size: 0.84rem; font-weight: 600; color: #16a34a; }
+    .connected-badge::before { content: ''; width: 8px; height: 8px; background: #16a34a; border-radius: 50%; flex-shrink: 0; }
+    .btn-disconnect {
+      padding: 4px 10px; border: 1.5px solid #e5e7eb; border-radius: 6px;
+      background: #fff; color: #6b7280; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.12s;
+    }
+    .btn-disconnect:hover { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
+    .sheet-status { margin-top: 10px; font-size: 0.82rem; font-weight: 600; display: none; align-items: center; gap: 6px; }
+    .sheet-status.visible { display: flex; }
+    .sheet-status.ok { color: #16a34a; }
+    .sheet-status.err { color: #dc2626; }
+    .sheet-status.loading { color: #2563eb; }
+    .spinner { width: 13px; height: 13px; border: 2px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #cbd5e1; border-radius: 10px; background: #f8fafc;
+      padding: 26px 20px; text-align: center; cursor: pointer; transition: all 0.15s; position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #2563eb; background: #eff6ff; }
+    .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .drop-zone .dz-icon { font-size: 1.8rem; margin-bottom: 6px; }
+    .drop-zone .dz-label { font-size: 0.93rem; font-weight: 600; color: #374151; }
+    .drop-zone .dz-sub { font-size: 0.77rem; color: #9ca3af; margin-top: 3px; }
+    .drop-zone.loaded { border-color: #16a34a; background: #f0fdf4; }
+    .drop-zone.loaded .dz-label { color: #15803d; }
+
+    /* Fields */
+    .field { margin-bottom: 18px; }
+    label.field-label {
+      display: block; font-size: 0.75rem; font-weight: 700; color: #374151;
+      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+    }
+    .badge {
+      display: inline-block; font-size: 0.65rem; font-weight: 600;
+      background: #eff6ff; color: #2563eb; border-radius: 4px; padding: 1px 6px;
+      margin-left: 6px; text-transform: none; letter-spacing: 0; vertical-align: middle;
+    }
+    .count-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 20px; padding: 0 6px; background: #2563eb; color: #fff;
+      border-radius: 10px; font-size: 0.7rem; font-weight: 700; margin-left: 8px; vertical-align: middle;
+    }
+
+    /* SA picker */
+    .sa-picker { border: 1.5px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .sa-search-row { display: flex; align-items: center; border-bottom: 1.5px solid #e5e7eb; background: #f9fafb; padding: 0 10px; }
+    .sa-search-row svg { width: 15px; height: 15px; color: #9ca3af; flex-shrink: 0; }
+    .sa-search { flex: 1; border: none; background: transparent; padding: 9px 8px; font-size: 0.88rem; color: #111827; outline: none; }
+    .sa-search::placeholder { color: #b0b8c4; }
+    .sa-actions { display: flex; border-bottom: 1.5px solid #e5e7eb; }
+    .sa-action-btn { flex: 1; padding: 6px; border: none; background: #f9fafb; font-size: 0.75rem; font-weight: 600; color: #6b7280; cursor: pointer; transition: all 0.12s; }
+    .sa-action-btn:hover { background: #f1f5f9; color: #2563eb; }
+    .sa-action-btn + .sa-action-btn { border-left: 1.5px solid #e5e7eb; }
+    .sa-list { max-height: 190px; overflow-y: auto; padding: 6px 0; }
+    .sa-item { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; transition: background 0.1s; user-select: none; }
+    .sa-item:hover { background: #f1f5f9; }
+    .sa-check { width: 16px; height: 16px; border: 1.5px solid #d1d5db; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #fff; transition: all 0.12s; }
+    .sa-item.checked .sa-check { background: #2563eb; border-color: #2563eb; }
+    .sa-item.checked .sa-check::after { content: ''; display: block; width: 4px; height: 7px; border: 2px solid #fff; border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); }
+    .sa-item span { font-size: 0.88rem; color: #374151; }
+    .sa-item.hidden { display: none; }
+
+    /* Staging */
+    .staging-wrap { margin-top: 10px; display: none; border: 1.5px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .staging-wrap.visible { display: block; }
+    .staging-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #f9fafb; border-bottom: 1.5px solid #e5e7eb; flex-wrap: wrap; gap: 8px; }
+    .staging-label { font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+    .staging-hint { font-size: 0.73rem; color: #9ca3af; }
+    .btn-group-all { padding: 5px 12px; border: 1.5px solid #e5e7eb; border-radius: 6px; background: #f9fafb; color: #6b7280; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .btn-group-all:hover { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+    .btn-group-sel { display: none; padding: 5px 12px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+    .btn-group-sel:hover { background: #1d4ed8; }
+    .btn-group-sel.visible { display: inline-block; }
+    .staging-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+    /* Chip wrap (holds chip + sub-list + expand panel) */
+    .chip-wrap { display: flex; flex-direction: column; gap: 4px; }
+
+    /* Single chip */
+    .chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 8px; border: 1.5px solid #e5e7eb; border-radius: 7px; background: #f9fafb; cursor: pointer; user-select: none; transition: all 0.12s; }
+    .chip:hover { border-color: #93c5fd; background: #f0f7ff; }
+    .chip.sel { border-color: #2563eb; background: #eff6ff; }
+    .chip.has-subs { border-color: #0d9488; background: #f0fdfa; cursor: default; }
+    .chip-check { width: 15px; height: 15px; border: 1.5px solid #d1d5db; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #fff; transition: all 0.12s; }
+    .chip.sel .chip-check { background: #2563eb; border-color: #2563eb; }
+    .chip.sel .chip-check::after { content: ''; display: block; width: 3px; height: 6px; border: 2px solid #fff; border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); }
+    .chip-label { font-size: 0.86rem; color: #374151; flex: 1; }
+    .sub-badge { display: inline-block; font-size: 0.65rem; font-weight: 600; background: #ccfbf1; color: #0f766e; border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+    .btn-drill { padding: 3px 8px; border: 1.5px solid #d1d5db; border-radius: 5px; background: #fff; color: #6b7280; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 0.12s; white-space: nowrap; flex-shrink: 0; }
+    .btn-drill:hover { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
+    .btn-drill.open { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
+    .chip-remove { width: 18px; height: 18px; border-radius: 4px; border: none; background: transparent; color: #9ca3af; font-size: 1rem; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: all 0.1s; flex-shrink: 0; }
+    .chip-remove:hover { background: #fee2e2; color: #dc2626; }
+
+    /* Sub-entries list */
+    .sub-list { display: flex; flex-direction: column; gap: 3px; padding-left: 16px; }
+    .sub-entry { display: flex; align-items: center; gap: 7px; padding: 5px 10px 5px 8px; border: 1px solid #99f6e4; border-radius: 6px; background: #f0fdfa; font-size: 0.83rem; }
+    .sub-connector { color: #5eead4; flex-shrink: 0; font-size: 0.85rem; }
+    .sub-label { flex: 1; color: #134e4a; }
+    .sub-label strong { color: #0f766e; font-weight: 700; }
+    .sub-col-tag { font-size: 0.63rem; font-weight: 700; color: #0f766e; background: #ccfbf1; border-radius: 3px; padding: 1px 5px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.03em; }
+    .btn-remove-sub { border: none; background: transparent; color: #9ca3af; font-size: 0.9rem; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.1s; flex-shrink: 0; }
+    .btn-remove-sub:hover { color: #dc2626; }
+
+    /* Expand panel */
+    .expand-panel { border: 1.5px solid #c7d2fe; border-radius: 8px; overflow: hidden; }
+    .exp-header { padding: 8px 12px; background: #e0e7ff; border-bottom: 1px solid #c7d2fe; font-size: 0.82rem; color: #4338ca; }
+    .exp-header strong { color: #3730a3; }
+    .exp-tabs { display: flex; border-bottom: 1px solid #c7d2fe; }
+    .exp-tab { flex: 1; padding: 7px 6px; border: none; background: #eef2ff; font-size: 0.78rem; font-weight: 600; color: #6b7280; cursor: pointer; transition: all 0.12s; border-right: 1px solid #c7d2fe; }
+    .exp-tab:last-child { border-right: none; }
+    .exp-tab:hover { background: #e0e7ff; color: #4338ca; }
+    .exp-tab.active { background: #6366f1; color: #fff; }
+    .exp-actions { display: flex; border-bottom: 1px solid #c7d2fe; }
+    .exp-action-btn { flex: 1; padding: 5px; border: none; background: #eef2ff; font-size: 0.72rem; font-weight: 600; color: #6b7280; cursor: pointer; transition: all 0.1s; }
+    .exp-action-btn:hover { background: #e0e7ff; color: #4338ca; }
+    .exp-action-btn + .exp-action-btn { border-left: 1px solid #c7d2fe; }
+    .exp-search { display: flex; align-items: center; border-bottom: 1px solid #c7d2fe; background: #eef2ff; padding: 0 10px; }
+    .exp-search svg { width: 13px; height: 13px; color: #a5b4fc; flex-shrink: 0; }
+    .exp-search-input { flex: 1; border: none; background: transparent; padding: 7px 8px; font-size: 0.83rem; color: #374151; outline: none; }
+    .exp-search-input::placeholder { color: #c7d2fe; }
+    .exp-list { max-height: 170px; overflow-y: auto; padding: 4px 0; background: #fff; }
+    .exp-item { display: flex; align-items: center; gap: 10px; padding: 6px 12px; cursor: pointer; transition: background 0.1s; }
+    .exp-item:hover { background: #eef2ff; }
+    .exp-item.hidden { display: none; }
+    .exp-check { width: 14px; height: 14px; border: 1.5px solid #a5b4fc; border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #fff; transition: all 0.12s; }
+    .exp-item.checked .exp-check { background: #6366f1; border-color: #6366f1; }
+    .exp-item.checked .exp-check::after { content: ''; display: block; width: 3px; height: 5px; border: 2px solid #fff; border-top: none; border-left: none; transform: rotate(45deg) translate(-1px,-1px); }
+    .exp-val { font-size: 0.84rem; color: #374151; }
+    .exp-empty { padding: 14px 12px; font-size: 0.82rem; color: #9ca3af; font-style: italic; text-align: center; }
+    .exp-footer { display: flex; gap: 8px; justify-content: flex-end; padding: 8px 12px; background: #e0e7ff; border-top: 1px solid #c7d2fe; align-items: center; }
+    .exp-sel-count { flex: 1; font-size: 0.75rem; color: #6366f1; font-weight: 600; }
+    .btn-exp-cancel { padding: 5px 12px; border: 1.5px solid #c7d2fe; border-radius: 6px; background: #fff; color: #6b7280; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.12s; }
+    .btn-exp-cancel:hover { border-color: #9ca3af; }
+    .btn-exp-apply { padding: 5px 14px; border: none; border-radius: 6px; background: #6366f1; color: #fff; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: background 0.12s; }
+    .btn-exp-apply:hover:not(:disabled) { background: #4f46e5; }
+    .btn-exp-apply:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* Group block */
+    .group-block { border: 1.5px solid #a5b4fc; border-radius: 8px; background: #f5f3ff; overflow: hidden; }
+    .group-header { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: #ede9fe; border-bottom: 1px solid #c4b5fd; }
+    .group-icon { font-size: 0.85rem; flex-shrink: 0; }
+    .group-name { flex: 1; font-size: 0.86rem; font-weight: 700; color: #4c1d95; border: none; background: transparent; outline: none; cursor: text; min-width: 0; }
+    .group-name:focus { background: #fff; border-radius: 4px; padding: 1px 4px; }
+    .group-name-hint { font-size: 0.7rem; color: #8b5cf6; white-space: nowrap; }
+    .btn-ungroup { padding: 3px 9px; border: 1px solid #c4b5fd; border-radius: 5px; background: #fff; color: #7c3aed; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 0.12s; white-space: nowrap; flex-shrink: 0; }
+    .btn-ungroup:hover { background: #ede9fe; }
+    .group-members { padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 4px; }
+    .group-member { display: flex; align-items: center; gap: 6px; font-size: 0.83rem; color: #5b21b6; }
+    .group-member::before { content: '·'; font-weight: 700; }
+    .btn-remove-member { margin-left: auto; border: none; background: transparent; color: #c4b5fd; font-size: 0.9rem; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.1s; }
+    .btn-remove-member:hover { color: #dc2626; }
+
+    /* Standard select */
+    select {
+      width: 100%; padding: 10px 36px 10px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px;
+      font-size: 0.93rem; color: #111827;
+      background: #f9fafb url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M6 8L0 0h12z'/%3E%3C/svg%3E") no-repeat right 14px center;
+      appearance: none; cursor: pointer; transition: border-color 0.15s;
+    }
+    select:focus { outline: none; border-color: #2563eb; background-color: #fff; box-shadow: 0 0 0 3px rgba(37,99,235,0.10); }
+
+    .divider { border: none; border-top: 1.5px solid #f3f4f6; margin: 24px 0; }
+
+    /* Contact toggle */
+    .contact-row { display: flex; gap: 12px; }
+    .contact-option { flex: 1; position: relative; }
+    .contact-option input[type="radio"] { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; margin: 0; }
+    .contact-option label { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1.5px solid #e5e7eb; border-radius: 8px; background: #f9fafb; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: #6b7280; transition: all 0.15s; }
+    .contact-option input[type="radio"]:checked + label { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+    .contact-option label svg { width: 16px; height: 16px; }
+
+    /* Tutors toggle */
+    .tutors-toggle { display: flex; align-items: center; gap: 14px; padding: 13px 16px; margin-bottom: 20px; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; cursor: pointer; user-select: none; transition: all 0.15s; }
+    .tutors-toggle:hover { border-color: #f59e0b; background: #fffbeb; }
+    .tutors-toggle.active { border-color: #f59e0b; background: #fffbeb; }
+    .toggle-switch { width: 38px; height: 22px; background: #d1d5db; border-radius: 11px; flex-shrink: 0; position: relative; transition: background 0.2s; }
+    .tutors-toggle.active .toggle-switch { background: #f59e0b; }
+    .toggle-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .tutors-toggle.active .toggle-knob { transform: translateX(16px); }
+    .toggle-text { flex: 1; }
+    .toggle-label { font-size: 0.9rem; font-weight: 700; color: #374151; }
+    .tutors-toggle.active .toggle-label { color: #92400e; }
+    .toggle-desc { font-size: 0.77rem; color: #9ca3af; margin-top: 1px; }
+    .tutors-toggle.active .toggle-desc { color: #b45309; }
+
+    /* Run button */
+    .btn-run { width: 100%; padding: 13px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: 8px; }
+    .btn-run:hover { background: #1d4ed8; }
+
+    /* Error */
+    .error-msg { background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 8px; padding: 12px 16px; color: #b91c1c; font-size: 0.88rem; margin-top: 16px; display: none; }
+    .error-msg.visible { display: block; }
+
+    /* Results */
+    #resultsSection { width: 100%; max-width: 620px; display: none; flex-direction: column; gap: 20px; }
+    #resultsSection.visible { display: flex; }
+    .result-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.09); padding: 28px 32px; }
+    .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .result-title { font-size: 1rem; font-weight: 700; color: #111827; }
+    .result-meta { display: flex; align-items: center; gap: 8px; }
+    .result-count { font-size: 0.78rem; font-weight: 600; background: #eff6ff; color: #2563eb; border-radius: 20px; padding: 3px 11px; }
+    .view-toggle { display: flex; gap: 5px; }
+    .btn-view { padding: 4px 11px; border: 1.5px solid #e5e7eb; border-radius: 6px; background: #f9fafb; color: #6b7280; font-size: 0.76rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-view.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+    .table-wrap { overflow-x: auto; max-height: 320px; border: 1.5px solid #e5e7eb; border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.87rem; }
+    thead th { background: #f1f5f9; color: #374151; font-weight: 700; text-align: left; padding: 9px 13px; position: sticky; top: 0; border-bottom: 1.5px solid #e5e7eb; font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody td { padding: 8px 13px; color: #374151; border-bottom: 1px solid #f1f5f9; }
+    tbody tr:last-child td { border-bottom: none; }
+    .no-data { color: #9ca3af; font-style: italic; }
+    .csv-scroll { background: #f8fafc; border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; max-height: 320px; overflow-y: auto; font-family: 'Consolas','Courier New',monospace; font-size: 0.81rem; color: #1e3a5f; line-height: 1.7; white-space: pre; display: none; }
+    .btn-download { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; background: #16a34a; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn-download:hover { background: #15803d; }
+    .btn-download svg { width: 14px; height: 14px; fill: #fff; }
+    .empty-note { padding: 14px 4px; color: #9ca3af; font-style: italic; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2">
+        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>
+      </svg>
+    </div>
+    <div><h1>Worker Query Builder</h1><p>UAW 4811 — filter workers and export contact lists</p></div>
+  </div>
+
+  <!-- Data Source -->
+  <div class="source-section">
+    <div class="source-tabs">
+      <button class="src-tab active" id="tabLive" onclick="switchTab('live')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h4M18 12h4M12 2v4M12 18v4"/></svg>
+        Live Sync
+      </button>
+      <button class="src-tab" id="tabUpload" onclick="switchTab('upload')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload File
+      </button>
+    </div>
+    <div class="src-panel" id="livePanel">
+      <div id="liveBefore">
+        <p class="live-desc">Connect your Google account to load your campus <strong>Integrated List</strong> directly. Access is controlled by your existing Google Sheet sharing settings.</p>
+        <button class="btn-google" onclick="signInGoogle()">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+          Connect with Google
+        </button>
+      </div>
+      <div id="liveAfter" style="display:none">
+        <div class="connected-row">
+          <span class="connected-badge" id="connectedAs">Connected</span>
+          <button class="btn-disconnect" onclick="signOutGoogle()">Disconnect</button>
+        </div>
+        <select id="sheetSelect" onchange="onSheetSelect()">
+          <option value="">— Select your campus Integrated List —</option>
+        </select>
+        <div class="sheet-status" id="sheetStatus"></div>
+      </div>
+    </div>
+    <div class="src-panel" id="uploadPanel" style="display:none">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" />
+        <div class="dz-icon">📂</div>
+        <div class="dz-label" id="dzLabel">Click or drag your .xlsx file here</div>
+        <div class="dz-sub">Uses the "Integrated UC-UAW List" sheet automatically</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tutors Only -->
+  <div class="tutors-toggle" id="tutorsToggle" onclick="toggleTutors()">
+    <div class="toggle-switch"><div class="toggle-knob"></div></div>
+    <div class="toggle-text">
+      <div class="toggle-label">Tutors Only</div>
+      <div class="toggle-desc">Returns all AATC workers + all workers with "Reader/Tutor" in JobTypes</div>
+    </div>
+  </div>
+
+  <!-- SuperArea -->
+  <div class="field" id="superAreaField">
+    <label class="field-label">SuperArea <span class="count-badge" id="saCount">0</span></label>
+    <div class="sa-picker">
+      <div class="sa-search-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input class="sa-search" id="saSearch" type="text" placeholder="Search areas…" oninput="filterSA()" />
+      </div>
+      <div class="sa-actions">
+        <button class="sa-action-btn" onclick="selectAllSA()">Select all</button>
+        <button class="sa-action-btn" onclick="clearAllSA()">Clear all</button>
+      </div>
+      <div class="sa-list" id="saList"></div>
+    </div>
+    <div class="staging-wrap" id="stagingWrap">
+      <div class="staging-toolbar">
+        <div>
+          <span class="staging-label">Arrange results</span>
+          <span class="staging-hint"> — select chips to group, or expand into sub-areas</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn-group-all" id="btnGroupAll" onclick="groupAll()">Group all</button>
+          <button class="btn-group-sel" id="btnGroupSel" onclick="groupSelected()">＋ Group selected</button>
+        </div>
+      </div>
+      <div class="staging-list" id="stagingList"></div>
+    </div>
+  </div>
+
+  <!-- Membership -->
+  <div class="field">
+    <label class="field-label" for="membership">Membership</label>
+    <select id="membership">
+      <option value="">— Select Membership —</option>
+      <option value="Y">Y — Member</option>
+      <option value="nonmembers">All non-members (except DNC)</option>
+    </select>
+  </div>
+
+  <!-- Unit -->
+  <div class="field">
+    <label class="field-label" for="unit">Unit <span class="badge">ASE = all non-AR/PD</span></label>
+    <select id="unit">
+      <option value="">— Select Unit —</option>
+      <option value="ASE">ASE (excludes AR &amp; PD)</option>
+      <option value="PD">PD</option>
+      <option value="AR">AR</option>
+      <option value="PDAR">PD and AR</option>
+    </select>
+  </div>
+
+  <!-- ASECRV26 -->
+  <div class="field">
+    <label class="field-label" for="asecrv26">ASECRV26</label>
+    <select id="asecrv26">
+      <option value="">— Select ASECRV26 —</option>
+      <option value="blanks">(Blanks) — not yet voted</option>
+      <option value="Voted">Voted</option>
+    </select>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- Contact Column -->
+  <div class="field">
+    <label class="field-label">Contact Column</label>
+    <div class="contact-row">
+      <div class="contact-option">
+        <input type="radio" name="contact" id="contactCell" value="Cellphone" checked />
+        <label for="contactCell">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1"/></svg>
+          Adudialer/Spreed
+        </label>
+      </div>
+      <div class="contact-option">
+        <input type="radio" name="contact" id="contactEmail" value="Email" />
+        <label for="contactEmail">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg>
+          MailMerge
+        </label>
+      </div>
+      <div class="contact-option">
+        <input type="radio" name="contact" id="contactCallhub" value="Callhub" />
+        <label for="contactCallhub">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+          Callhub/DaisyChain
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+  <button class="btn-run" onclick="runQuery()">Run Query</button>
+</div>
+
+<div id="resultsSection"></div>
+
+<script>
+  // ── Google config ──────────────────────────────────────────
+  // Replace with your Client ID after Google Cloud setup:
+  const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
+  const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.metadata.readonly';
+  const TARGET_TAB = 'Integrated UC-UAW List';
+  const DRILL_COLS = [
+    { key: 'Area',         label: 'Area' },
+    { key: 'DeptEnrolled', label: 'Dept Enrolled' },
+    { key: 'PI',           label: 'PI / Lab' }
+  ];
+
+  // ── State ──────────────────────────────────────────────────
+  let allRows     = null;
+  let accessToken = null;
+  let tokenClient = null;
+  let idSeq       = 0;
+  let tutorsOnly  = false;
+  let entries     = [];       // staging entries
+  let expandState = null;     // { parentId, col, selected: Set, searchQ: '' }
+
+  const SA_OPTIONS = [
+    'AATC','Ag and Resource Economics','Agriculture','Anthropology','Art','Art History',
+    'Biology','Biophysics','Chemistry','Civil and Environmental Engineering','Communication',
+    'Community Development','CS and ECE','Cultural Studies','Earth and Planetary Sciences',
+    'Economics','Education','Energy Systems','English','Env Policy and Management',
+    'Fine Arts','Forensic Science','Geography','History','Human Development','Human Ecology',
+    'International Agricultural Development','Languages','Law','Linguistics','Management',
+    'Mathematics','Mechanical and Aerospace Engineering','Med Campus','MSE and ChemE',
+    'Neuroscience','Philosophy','Physics','Plants','Political Science','Psychology',
+    'Public Health','Religion','Sociology','Spanish','Statistics',
+    'Transportation Technology and Policy','UCD Area Unknown',
+    'UCD Health Public Health Sciences','UCD Medical Center',
+    'UCD Research and Policy','UCD School of Law','Water and Atmosphere'
+  ];
+
+  function nextId() { return 'e' + (++idSeq); }
+  const cellVal = (row, col) => String(row[col] || '').trim();
+
+  // ── Tab switcher ───────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('livePanel').style.display   = tab === 'live'   ? '' : 'none';
+    document.getElementById('uploadPanel').style.display = tab === 'upload' ? '' : 'none';
+    document.getElementById('tabLive').classList.toggle('active',   tab === 'live');
+    document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
+    allRows = null;
+  }
+
+  // ── Google Live Sync ───────────────────────────────────────
+  function signInGoogle() {
+    if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com') {
+      showError('Live Sync not yet configured — paste your Google Client ID into the HTML, or use Upload File mode.');
+      return;
+    }
+    if (!tokenClient) {
+      if (typeof google === 'undefined') { showError('Google library failed to load. Check your connection.'); return; }
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID, scope: GOOGLE_SCOPES, callback: handleToken
+      });
+    }
+    tokenClient.requestAccessToken({ prompt: '' });
+  }
+
+  async function handleToken(resp) {
+    if (resp.error) { showError('Sign-in failed: ' + resp.error); return; }
+    accessToken = resp.access_token;
+    document.getElementById('liveBefore').style.display = 'none';
+    document.getElementById('liveAfter').style.display  = '';
+    setSheetStatus('loading', 'Finding your Integrated List sheets…');
+    try {
+      const q   = encodeURIComponent("name contains 'Integrated List' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=name&includeItemsFromAllDrives=true&supportsAllDrives=true`, { headers: { Authorization: 'Bearer ' + accessToken } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Drive API error');
+      const sel = document.getElementById('sheetSelect');
+      sel.innerHTML = '<option value="">— Select your campus Integrated List —</option>';
+      (data.files || []).forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.name; sel.appendChild(o); });
+      setSheetStatus(data.files?.length ? 'ok' : 'err', data.files?.length ? `Found ${data.files.length} sheet(s) — select yours below.` : 'No Integrated List sheets found in your Drive.');
+    } catch(e) { setSheetStatus('err', 'Error: ' + e.message); }
+  }
+
+  async function onSheetSelect() {
+    const id = document.getElementById('sheetSelect').value;
+    if (!id) return;
+    allRows = null;
+    setSheetStatus('loading', 'Loading sheet data…');
+    try {
+      const res  = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(TARGET_TAB)}`, { headers: { Authorization: 'Bearer ' + accessToken } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Sheets API error');
+      if (!data.values || data.values.length < 2) throw new Error(`Tab "${TARGET_TAB}" is empty or not found.`);
+      const [headers, ...rows] = data.values;
+      allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
+      setSheetStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows`);
+    } catch(e) { setSheetStatus('err', 'Error: ' + e.message); allRows = null; }
+  }
+
+  function signOutGoogle() {
+    if (accessToken && typeof google !== 'undefined') google.accounts.oauth2.revoke(accessToken);
+    accessToken = tokenClient = allRows = null;
+    document.getElementById('liveBefore').style.display = '';
+    document.getElementById('liveAfter').style.display  = 'none';
+    setSheetStatus('', '');
+  }
+
+  function setSheetStatus(type, msg) {
+    const el = document.getElementById('sheetStatus');
+    el.className = 'sheet-status';
+    if (!type) { el.innerHTML = ''; return; }
+    el.classList.add('visible', type);
+    el.innerHTML = type === 'loading' ? `<span class="spinner"></span>${msg}` : msg;
+  }
+
+  // ── File upload ────────────────────────────────────────────
+  const dropZone = document.getElementById('dropZone'), fileInput = document.getElementById('fileInput');
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        if (!wb.SheetNames.includes(TARGET_TAB)) { showError(`Sheet "${TARGET_TAB}" not found. Available: ${wb.SheetNames.join(', ')}`); return; }
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[TARGET_TAB], { defval: '' });
+        dropZone.classList.add('loaded');
+        document.getElementById('dzLabel').textContent = `✓ ${file.name} (${allRows.length.toLocaleString()} rows)`;
+      } catch(err) { showError('Could not read file: ' + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // ── Tutors toggle ──────────────────────────────────────────
+  function toggleTutors() {
+    tutorsOnly = !tutorsOnly;
+    document.getElementById('tutorsToggle').classList.toggle('active', tutorsOnly);
+    document.getElementById('superAreaField').style.display = tutorsOnly ? 'none' : '';
+  }
+
+  // ── SA picker ─────────────────────────────────────────────
+  const saListEl = document.getElementById('saList');
+  SA_OPTIONS.forEach(opt => {
+    const item = document.createElement('div');
+    item.className = 'sa-item'; item.dataset.value = opt;
+    item.innerHTML = `<div class="sa-check"></div><span>${opt}</span>`;
+    item.addEventListener('click', () => toggleSA(opt, item));
+    saListEl.appendChild(item);
+  });
+
+  function toggleSA(val, el) {
+    if (el.classList.contains('checked')) {
+      el.classList.remove('checked'); removeAreaFromEntries(val);
+    } else {
+      el.classList.add('checked');
+      entries.push({ id: nextId(), type: 'single', area: val, subEntries: [], chipSel: false });
+      renderStaging();
+    }
+    updateSACount();
+  }
+
+  function removeAreaFromEntries(val) {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i];
+      if (e.type === 'single' && e.area === val) { entries.splice(i, 1); }
+      else if (e.type === 'group') {
+        e.areas = e.areas.filter(a => a !== val);
+        if (e.areas.length === 1) entries.splice(i, 1, { id: nextId(), type: 'single', area: e.areas[0], subEntries: [], chipSel: false });
+        else if (e.areas.length === 0) entries.splice(i, 1);
+      }
+    }
+    if (expandState) { const p = entries.find(e => e.id === expandState.parentId); if (!p) expandState = null; }
+    renderStaging();
+  }
+
+  function updateSACount() {
+    document.getElementById('saCount').textContent =
+      SA_OPTIONS.filter(o => saListEl.querySelector(`[data-value="${CSS.escape(o)}"]`)?.classList.contains('checked')).length;
+  }
+
+  function filterSA() {
+    const q = document.getElementById('saSearch').value.toLowerCase();
+    saListEl.querySelectorAll('.sa-item').forEach(el => el.classList.toggle('hidden', !el.dataset.value.toLowerCase().includes(q)));
+  }
+
+  function selectAllSA() {
+    saListEl.querySelectorAll('.sa-item:not(.hidden):not(.checked)').forEach(el => {
+      el.classList.add('checked');
+      entries.push({ id: nextId(), type: 'single', area: el.dataset.value, subEntries: [], chipSel: false });
+    });
+    updateSACount(); renderStaging();
+  }
+
+  function clearAllSA() {
+    saListEl.querySelectorAll('.sa-item.checked').forEach(el => el.classList.remove('checked'));
+    entries = []; expandState = null; updateSACount(); renderStaging();
+  }
+
+  // ── Drill-down helpers ─────────────────────────────────────
+  function getSubValues(area, col) {
+    if (!allRows) return [];
+    const vals = new Set();
+    allRows.forEach(row => { if (cellVal(row, 'SuperArea') === area) { const v = cellVal(row, col); if (v) vals.add(v); } });
+    return [...vals].sort((a, b) => a.localeCompare(b));
+  }
+
+  function startExpand(id) {
+    if (!allRows) { showError('Load data first to see sub-categories.'); return; }
+    expandState = { parentId: id, col: 'Area', selected: new Set(), searchQ: '' };
+    // Pre-populate selections from existing subEntries
+    const entry = entries.find(e => e.id === id);
+    if (entry && entry.subEntries.length > 0) {
+      expandState.col = entry.subEntries[0].subCol;
+      entry.subEntries.forEach(s => expandState.selected.add(s.subVal));
+    }
+    renderStaging();
+  }
+
+  function setExpandTab(col) { if (expandState) { expandState.col = col; expandState.searchQ = ''; renderStaging(); } }
+  function toggleSubSel(val) { if (!expandState) return; expandState.selected.has(val) ? expandState.selected.delete(val) : expandState.selected.add(val); renderStaging(); }
+  function selectAllExpand(area, col) { getSubValues(area, col).forEach(v => expandState.selected.add(v)); renderStaging(); }
+  function clearAllExpand() { expandState.selected.clear(); renderStaging(); }
+  function cancelExpand() { expandState = null; renderStaging(); }
+
+  function applyExpand(parentId) {
+    if (!expandState || expandState.selected.size === 0) return;
+    const parent = entries.find(e => e.id === parentId); if (!parent) return;
+    const col = expandState.col;
+    parent.subEntries = [...expandState.selected].sort().map(val => ({ id: nextId(), subCol: col, subVal: val }));
+    parent.chipSel = false;
+    expandState = null;
+    renderStaging();
+  }
+
+  function removeSubEntry(parentId, subId) {
+    const parent = entries.find(e => e.id === parentId); if (!parent) return;
+    parent.subEntries = parent.subEntries.filter(s => s.id !== subId);
+    renderStaging();
+  }
+
+  function clearDrill(parentId) {
+    const parent = entries.find(e => e.id === parentId); if (!parent) return;
+    parent.subEntries = [];
+    renderStaging();
+  }
+
+  // ── Staging render ─────────────────────────────────────────
+  function renderStaging() {
+    const wrap = document.getElementById('stagingWrap'), list = document.getElementById('stagingList');
+    if (entries.length === 0) { wrap.classList.remove('visible'); return; }
+    wrap.classList.add('visible');
+    list.innerHTML = '';
+
+    entries.forEach(entry => {
+      if (entry.type === 'single') {
+        list.appendChild(renderSingleWrap(entry));
+      } else if (entry.type === 'group') {
+        list.appendChild(renderGroupBlock(entry));
+      }
+    });
+    updateGroupBtn();
+  }
+
+  function renderSingleWrap(entry) {
+    const hasSubs   = entry.subEntries.length > 0;
+    const isOpen    = expandState && expandState.parentId === entry.id;
+    const canDrill  = !!allRows;
+    const wrap = document.createElement('div');
+    wrap.className = 'chip-wrap';
+
+    // Main chip
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (hasSubs ? ' has-subs' : (entry.chipSel ? ' sel' : ''));
+    chip.innerHTML = `
+      ${!hasSubs ? '<div class="chip-check"></div>' : ''}
+      <span class="chip-label">${entry.area}${hasSubs ? `<span class="sub-badge">${entry.subEntries.length} sub-area${entry.subEntries.length !== 1 ? 's' : ''}</span>` : ''}</span>
+      ${hasSubs ? `<button class="btn-drill" style="font-size:0.7rem;color:#0f766e;border-color:#99f6e4;background:#f0fdfa" onclick="event.stopPropagation();clearDrill('${entry.id}')" title="Remove expansion">✕ Clear</button>` : ''}
+      ${canDrill ? `<button class="btn-drill${isOpen ? ' open' : ''}" onclick="event.stopPropagation();${isOpen ? 'cancelExpand()' : `startExpand('${entry.id}')`}" title="Expand to Area / DeptEnrolled / Lab">${isOpen ? '▲ Close' : '▾ Expand to Area/Dept/Lab'}</button>` : ''}
+      <button class="chip-remove" onclick="event.stopPropagation();removeSingle('${entry.id}')">×</button>`;
+    if (!hasSubs) chip.addEventListener('click', () => toggleChipSel(entry.id));
+    wrap.appendChild(chip);
+
+    // Sub-entries list
+    if (hasSubs) {
+      const subList = document.createElement('div');
+      subList.className = 'sub-list';
+      entry.subEntries.forEach(sub => {
+        const se = document.createElement('div');
+        se.className = 'sub-entry';
+        const colLabel = DRILL_COLS.find(c => c.key === sub.subCol)?.label || sub.subCol;
+        se.innerHTML = `
+          <span class="sub-connector">└</span>
+          <span class="sub-label"><strong>${entry.area}</strong> › ${sub.subVal}</span>
+          <span class="sub-col-tag">${colLabel}</span>
+          <button class="btn-remove-sub" onclick="removeSubEntry('${entry.id}','${sub.id}')" title="Remove">×</button>`;
+        subList.appendChild(se);
+      });
+      wrap.appendChild(subList);
+    }
+
+    // Expand panel
+    if (isOpen) wrap.appendChild(renderExpandPanel(entry));
+
+    return wrap;
+  }
+
+  function renderExpandPanel(entry) {
+    const panel = document.createElement('div');
+    panel.className = 'expand-panel';
+
+    const tabsHtml = DRILL_COLS.map(c =>
+      `<button class="exp-tab${expandState.col === c.key ? ' active' : ''}" onclick="setExpandTab('${c.key}')">${c.label}</button>`
+    ).join('');
+
+    const vals = getSubValues(entry.area, expandState.col);
+    const q    = (expandState.searchQ || '').toLowerCase();
+    let listHtml = '';
+    if (vals.length === 0) {
+      listHtml = `<div class="exp-empty">No "${expandState.col}" values found for ${entry.area}</div>`;
+    } else {
+      listHtml = vals.map(v => {
+        const hidden  = q && !v.toLowerCase().includes(q) ? ' hidden' : '';
+        const checked = expandState.selected.has(v) ? ' checked' : '';
+        const safe    = v.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        return `<div class="exp-item${checked}${hidden}" onclick="toggleSubSel('${safe}')"><div class="exp-check"></div><span class="exp-val">${v}</span></div>`;
+      }).join('');
+    }
+
+    const sel = expandState.selected.size;
+    panel.innerHTML = `
+      <div class="exp-header">Drill into: <strong>${entry.area}</strong></div>
+      <div class="exp-tabs">${tabsHtml}</div>
+      <div class="exp-actions">
+        <button class="exp-action-btn" onclick="selectAllExpand('${entry.area}','${expandState.col}')">Select all</button>
+        <button class="exp-action-btn" onclick="clearAllExpand()">Clear all</button>
+      </div>
+      <div class="exp-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input class="exp-search-input" type="text" placeholder="Search…" value="${expandState.searchQ || ''}" oninput="expandState.searchQ=this.value;renderStaging()" />
+      </div>
+      <div class="exp-list">${listHtml}</div>
+      <div class="exp-footer">
+        <span class="exp-sel-count">${sel > 0 ? `${sel} selected` : ''}</span>
+        <button class="btn-exp-cancel" onclick="cancelExpand()">Cancel</button>
+        <button class="btn-exp-apply" onclick="applyExpand('${entry.id}')" ${sel === 0 ? 'disabled' : ''}>Apply${sel > 0 ? ` (${sel})` : ''}</button>
+      </div>`;
+    return panel;
+  }
+
+  function renderGroupBlock(entry) {
+    const block = document.createElement('div');
+    block.className = 'group-block';
+    const membersHtml = entry.areas.map(a =>
+      `<div class="group-member">${a}<button class="btn-remove-member" onclick="removeFromGroup('${entry.id}','${a.replace(/'/g,"\\'")}')">×</button></div>`
+    ).join('');
+    block.innerHTML = `
+      <div class="group-header">
+        <span class="group-icon">📁</span>
+        <input class="group-name" type="text" value="${entry.name}" onchange="renameGroup('${entry.id}',this.value)" />
+        <span class="group-name-hint">click to rename</span>
+        <button class="btn-ungroup" onclick="ungroupEntry('${entry.id}')">Ungroup</button>
+      </div>
+      <div class="group-members">${membersHtml}</div>`;
+    return block;
+  }
+
+  function toggleChipSel(id) {
+    const e = entries.find(e => e.id === id && e.type === 'single' && e.subEntries.length === 0);
+    if (e) { e.chipSel = !e.chipSel; renderStaging(); }
+  }
+
+  function updateGroupBtn() {
+    const sel = entries.filter(e => e.type === 'single' && e.chipSel && e.subEntries.length === 0).length;
+    const btn = document.getElementById('btnGroupSel');
+    if (sel >= 2) { btn.classList.add('visible'); btn.textContent = `＋ Group ${sel} selected`; }
+    else btn.classList.remove('visible');
+  }
+
+  function groupAll() {
+    const eligible = entries.filter(e => e.type === 'single' && e.subEntries.length === 0);
+    if (eligible.length < 2) return;
+    const areas = eligible.map(e => e.area);
+    const name  = areas.slice(0,2).join(' + ') + (areas.length > 2 ? ` +${areas.length-2}` : '');
+    const firstIdx = entries.indexOf(eligible[0]);
+    eligible.forEach(s => { const i = entries.indexOf(s); if (i !== -1) entries.splice(i,1); });
+    entries.splice(firstIdx, 0, { id: nextId(), type: 'group', name, areas, chipSel: false });
+    renderStaging();
+  }
+
+  function groupSelected() {
+    const sel = entries.filter(e => e.type === 'single' && e.chipSel && e.subEntries.length === 0);
+    if (sel.length < 2) return;
+    const areas = sel.map(e => e.area);
+    const name  = areas.slice(0,2).join(' + ') + (areas.length > 2 ? ` +${areas.length-2}` : '');
+    const firstIdx = entries.indexOf(sel[0]);
+    sel.forEach(s => { const i = entries.indexOf(s); if (i !== -1) entries.splice(i,1); });
+    entries.splice(firstIdx, 0, { id: nextId(), type: 'group', name, areas, chipSel: false });
+    renderStaging();
+  }
+
+  function renameGroup(id, name) { const e = entries.find(e => e.id === id); if (e) e.name = name; }
+
+  function ungroupEntry(id) {
+    const idx = entries.findIndex(e => e.id === id); if (idx === -1) return;
+    const singles = entries[idx].areas.map(a => ({ id: nextId(), type: 'single', area: a, subEntries: [], chipSel: false }));
+    entries.splice(idx, 1, ...singles); renderStaging();
+  }
+
+  function removeSingle(id) {
+    const e = entries.find(e => e.id === id); if (!e) return;
+    const pickerItem = saListEl.querySelector(`[data-value="${CSS.escape(e.area)}"]`);
+    if (pickerItem) pickerItem.classList.remove('checked');
+    entries = entries.filter(x => x.id !== id);
+    if (expandState?.parentId === id) expandState = null;
+    updateSACount(); renderStaging();
+  }
+
+  function removeFromGroup(groupId, area) {
+    const e = entries.find(e => e.id === groupId); if (!e) return;
+    e.areas = e.areas.filter(a => a !== area);
+    const pickerItem = saListEl.querySelector(`[data-value="${CSS.escape(area)}"]`);
+    if (pickerItem) pickerItem.classList.remove('checked');
+    if (e.areas.length === 1) entries.splice(entries.indexOf(e), 1, { id: nextId(), type: 'single', area: e.areas[0], subEntries: [], chipSel: false });
+    else if (e.areas.length === 0) entries = entries.filter(x => x.id !== groupId);
+    updateSACount(); renderStaging();
+  }
+
+  // ── Query engine ───────────────────────────────────────────
+  function baseFilter(rows, areas, membership, unit, asecrv26) {
+    return rows.filter(row => {
+      const rSA = cellVal(row,'SuperArea'), rM = cellVal(row,'Membership'),
+            rU  = cellVal(row,'Unit'),      rAV = cellVal(row,'ASECRV26');
+      if (areas && !areas.includes(rSA)) return false;
+      if (membership === 'nonmembers') { if (rM === 'Y' || rM === 'DNC') return false; }
+      else { if (rM !== membership) return false; }
+      if      (unit === 'ASE')  { if (rU.includes('AR') || rU.includes('PD')) return false; }
+      else if (unit === 'PD')   { if (!rU.includes('PD')) return false; }
+      else if (unit === 'AR')   { if (!rU.includes('AR') || rU.includes('SR')) return false; }
+      else if (unit === 'PDAR') { if (!rU.includes('PD') && !rU.includes('AR')) return false; }
+      if (asecrv26 === 'blanks') { if (rAV !== '') return false; }
+      else { if (rAV !== asecrv26) return false; }
+      return true;
+    });
+  }
+
+  function runQuery() {
+    hideError();
+    if (!allRows) { showError('No data loaded. Connect with Google (Live Sync) or upload a .xlsx file.'); return; }
+    if (!tutorsOnly && entries.length === 0) { showError('Please select at least one SuperArea.'); return; }
+    const membership = document.getElementById('membership').value;
+    const unit       = document.getElementById('unit').value;
+    const asecrv26   = document.getElementById('asecrv26').value;
+    const contact    = document.querySelector('input[name="contact"]:checked').value;
+    if (!membership || !unit || !asecrv26) { showError('Please select Membership, Unit, and ASECRV26.'); return; }
+
+    const buildRow = row => contact === 'Callhub'
+      ? { SuperArea: cellVal(row,'SuperArea'), Cellphone: cellVal(row,'Cellphone'), FirstName: cellVal(row,'FirstName'), LastName: cellVal(row,'LastName'), Email: cellVal(row,'Email') }
+      : { FirstName: cellVal(row,'FirstName'), [contact]: cellVal(row, contact) };
+
+    const section = document.getElementById('resultsSection');
+    section.innerHTML = ''; section.classList.add('visible');
+
+    if (tutorsOnly) {
+      const matched = allRows.filter(row => {
+        const rSA = cellVal(row,'SuperArea'), rJT = cellVal(row,'JobTypes');
+        if (rSA !== 'AATC' && !rJT.includes('Reader/Tutor')) return false;
+        return baseFilter([row], null, membership, unit, asecrv26).length > 0;
+      }).map(buildRow);
+      section.appendChild(buildResultCard('Tutors Only', matched, contact));
+    } else {
+      entries.forEach(entry => {
+        if (entry.type === 'single') {
+          const filtered = baseFilter(allRows, [entry.area], membership, unit, asecrv26);
+          if (entry.subEntries.length > 0) {
+            entry.subEntries.forEach(sub => {
+              const subFiltered = filtered.filter(row => cellVal(row, sub.subCol) === sub.subVal);
+              section.appendChild(buildResultCard(`${entry.area} › ${sub.subVal}`, subFiltered.map(buildRow), contact));
+            });
+          } else {
+            section.appendChild(buildResultCard(entry.area, filtered.map(buildRow), contact));
+          }
+        } else if (entry.type === 'group') {
+          const filtered = baseFilter(allRows, entry.areas, membership, unit, asecrv26);
+          section.appendChild(buildResultCard(entry.name, filtered.map(buildRow), contact));
+        }
+      });
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Result card ────────────────────────────────────────────
+  const CALLHUB_COLS = ['SuperArea','Cellphone','FirstName','LastName','Email'];
+
+  function buildResultCard(title, data, contact) {
+    const card = document.createElement('div'); card.className = 'result-card';
+    const cols = contact === 'Callhub' ? CALLHUB_COLS : ['FirstName', contact];
+    const csvLines = [cols.join(',')];
+    data.forEach(r => csvLines.push(cols.map(c => `"${(r[c]||'').replace(/"/g,'""')}"`).join(',')));
+    const csvContent = csvLines.join('\n');
+    card.dataset.csv = csvContent;
+
+    let tableHtml = data.length === 0 ? '<div class="empty-note">No rows matched these filters.</div>' :
+      `<div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>` +
+      data.map(r => '<tr>' + cols.map(c => { const v = r[c]||''; return `<td>${v||'<span class="no-data">—</span>'}</td>`; }).join('') + '</tr>').join('') +
+      '</tbody></table></div>';
+
+    const uid = 'rc_' + Math.random().toString(36).slice(2);
+    const safeTitle = title.replace(/'/g,"\\'");
+    card.innerHTML = `
+      <div class="result-header">
+        <div class="result-title">${title}</div>
+        <div class="result-meta">
+          <span class="result-count">${data.length} row${data.length!==1?'s':''}</span>
+          <div class="view-toggle">
+            <button class="btn-view active" id="${uid}_btnT" onclick="setView('${uid}','table')">Table</button>
+            <button class="btn-view"        id="${uid}_btnC" onclick="setView('${uid}','csv')">CSV</button>
+          </div>
+        </div>
+      </div>
+      <div id="${uid}_table">${tableHtml}</div>
+      <div id="${uid}_csv" class="csv-scroll">${csvContent}</div>
+      ${data.length>0?`<button class="btn-download" onclick="downloadCsv(this,'${safeTitle}','${contact}')"><svg viewBox="0 0 24 24"><path d="M12 16l-4-4h3V4h2v8h3l-4 4zm-7 4v-2h14v2H5z"/></svg>Download CSV</button>`:''}`;
+    return card;
+  }
+
+  function setView(uid, v) {
+    document.getElementById(uid+'_table').style.display = v==='table'?'':'none';
+    document.getElementById(uid+'_csv').style.display   = v==='csv'?'':'none';
+    document.getElementById(uid+'_btnT').classList.toggle('active', v==='table');
+    document.getElementById(uid+'_btnC').classList.toggle('active', v==='csv');
+  }
+
+  function downloadCsv(btn, title, contact) {
+    const content = btn.closest('.result-card').dataset.csv;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content],{type:'text/csv'}));
+    a.download = `${title.replace(/[^a-zA-Z0-9›]+/g,'_')}_${contact}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  function showError(msg) { const e=document.getElementById('errorMsg'); e.textContent=msg; e.classList.add('visible'); }
+  function hideError()    { document.getElementById('errorMsg').classList.remove('visible'); }
+</script>
+</body>
+</html>
