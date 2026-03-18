@@ -315,6 +315,10 @@
           <option value="">— Select your campus Integrated List —</option>
         </select>
         <div class="sheet-status" id="sheetStatus"></div>
+        <select id="mailMergeSelect" onchange="onMailMergeSelect()" style="margin-top:10px;">
+          <option value="">— Select your MailMerge sheet (for MailMerge push) —</option>
+        </select>
+        <div class="sheet-status" id="mailMergeStatus"></div>
         <div style="margin-top:14px; border-top:1.5px solid #e5e7eb; padding-top:14px;">
           <label style="display:block;font-size:0.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Or paste Sheet URL directly</label>
           <div style="display:flex;gap:8px;">
@@ -454,9 +458,10 @@
   ];
 
   // ── State ──────────────────────────────────────────────────
-  let allRows     = null;
-  let accessToken = null;
-  let tokenClient = null;
+  let allRows          = null;
+  let accessToken      = null;
+  let tokenClient      = null;
+  let mailMergeSheetId = null;
   let idSeq       = 0;
   let tutorsOnly  = false;
   let entries     = [];       // staging entries
@@ -507,6 +512,24 @@
       (data.files || []).forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.name; sel.appendChild(o); });
       setSheetStatus(data.files?.length ? 'ok' : 'err', data.files?.length ? `Found ${data.files.length} sheet(s) — select yours above.` : 'No Integrated List sheets found in your Drive.');
     } catch(e) { setSheetStatus('err', 'Error: ' + e.message); }
+
+    // Populate MailMerge sheet selector
+    try {
+      const qm  = encodeURIComponent("name contains 'MailMerge' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+      const res2 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${qm}&fields=files(id,name)&orderBy=name&includeItemsFromAllDrives=true&supportsAllDrives=true`, { headers: { Authorization: 'Bearer ' + accessToken } });
+      const data2 = await res2.json();
+      const mmSel = document.getElementById('mailMergeSelect');
+      mmSel.innerHTML = '<option value="">— Select your MailMerge sheet (for MailMerge push) —</option>';
+      (data2.files || []).forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.name; mmSel.appendChild(o); });
+    } catch(e) { /* silently skip if MailMerge sheets can't be found */ }
+  }
+
+  function onMailMergeSelect() {
+    mailMergeSheetId = document.getElementById('mailMergeSelect').value || null;
+    const el = document.getElementById('mailMergeStatus');
+    el.className = 'sheet-status';
+    if (mailMergeSheetId) { el.classList.add('visible','ok'); el.textContent = '✓ MailMerge sheet selected'; }
+    else { el.innerHTML = ''; }
   }
 
   async function onSheetSelect() {
@@ -561,7 +584,7 @@
 
   function signOutGoogle() {
     if (accessToken && typeof google !== 'undefined') google.accounts.oauth2.revoke(accessToken);
-    accessToken = tokenClient = allRows = null;
+    accessToken = tokenClient = allRows = mailMergeSheetId = null;
     document.getElementById('liveBefore').style.display = '';
     document.getElementById('liveAfter').style.display  = 'none';
     setSheetStatus('', '');
@@ -936,17 +959,10 @@
     const log = (...a) => console.log('[MailMerge]', ...a);
     const fail = msg => { throw new Error(msg); };
     try {
-      // Find MailMerge sheet
-      log('Searching for MailMerge sheet...');
-      const q = encodeURIComponent("name contains 'MailMerge' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
-      const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=name&includeItemsFromAllDrives=true&supportsAllDrives=true`,
-        { headers: { Authorization: 'Bearer ' + accessToken } });
-      const driveData = await driveRes.json();
-      log('Drive results:', JSON.stringify(driveData.files?.map(f=>f.name)));
-      if (!driveData.files || driveData.files.length === 0) fail('No sheet with "MailMerge" in the title found in your Google Drive.');
-      const mmFile = driveData.files[0];
-      const mmId = mmFile.id;
-      log('Using sheet:', mmFile.name, mmId);
+      // Use selected MailMerge sheet
+      if (!mailMergeSheetId) fail('No MailMerge sheet selected — please select one from the Live Sync panel.');
+      const mmId = mailMergeSheetId;
+      log('Using sheet ID:', mmId);
 
       // Get existing tabs
       log('Getting sheet info...');
