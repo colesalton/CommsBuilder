@@ -485,7 +485,7 @@
 
   // ── Google Live Sync ───────────────────────────────────────
   function signInGoogle() {
-    if (GOOGLE_CLIENT_ID === '652307992213-a9gk2h2hp942ucld9d77frg6dtchn2ft.apps.googleusercontent.com') {
+   if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('YOUR_CLIENT_ID')) {
       showError('Live Sync not yet configured — paste your Google Client ID into the HTML, or use Upload File mode.');
       return;
     }
