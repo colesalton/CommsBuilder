@@ -933,54 +933,69 @@
   }
 
   async function pushToMailMerge(resultCards, membership, unit) {
+    const log = (...a) => console.log('[MailMerge]', ...a);
+    const fail = msg => { throw new Error(msg); };
     try {
       // Find MailMerge sheet
+      log('Searching for MailMerge sheet...');
       const q = encodeURIComponent("name contains 'MailMerge' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
       const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=name&includeItemsFromAllDrives=true&supportsAllDrives=true`,
         { headers: { Authorization: 'Bearer ' + accessToken } });
       const driveData = await driveRes.json();
-      if (!driveData.files || driveData.files.length === 0) throw new Error('No sheet with "MailMerge" in the title found in your Google Drive.');
-      const mmId = driveData.files[0].id;
+      log('Drive results:', JSON.stringify(driveData.files?.map(f=>f.name)));
+      if (!driveData.files || driveData.files.length === 0) fail('No sheet with "MailMerge" in the title found in your Google Drive.');
+      const mmFile = driveData.files[0];
+      const mmId = mmFile.id;
+      log('Using sheet:', mmFile.name, mmId);
 
       // Get existing tabs
+      log('Getting sheet info...');
       const infoRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}?fields=sheets.properties`,
         { headers: { Authorization: 'Bearer ' + accessToken } });
       const infoData = await infoRes.json();
-      if (!infoRes.ok) throw new Error(infoData.error?.message || 'Could not access MailMerge sheet.');
+      log('Info status:', infoRes.status, infoRes.ok ? 'OK' : JSON.stringify(infoData.error));
+      if (!infoRes.ok) fail('Step getInfo: ' + (infoData.error?.message || 'Could not access MailMerge sheet.'));
       const existingSheets = infoData.sheets;
       const testSheet = existingSheets.find(s => s.properties.title.toLowerCase() === 'test');
       const baseIndex  = testSheet ? testSheet.properties.index : 0;
+      log('Test tab index:', baseIndex);
 
       let newTabCount = 0;
       for (const card of resultCards) {
         const tabName  = makeTabName(card.title, membership, unit);
         const existing = existingSheets.find(s => s.properties.title === tabName);
+        log('Card:', card.title, '→ tab:', tabName, existing ? '(exists, will clear)' : '(new)');
 
         if (existing) {
-          // Clear existing tab
-          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName)}:clear`,
+          const clearRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName)}:clear`,
             { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken } });
+          const clearData = await clearRes.json();
+          log('Clear status:', clearRes.status, clearRes.ok ? 'OK' : JSON.stringify(clearData.error));
+          if (!clearRes.ok) fail('Step clear "' + tabName + '": ' + (clearData.error?.message || 'unknown'));
         } else {
-          // Create new tab after "test"
           const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}:batchUpdate`,
             { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
               body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, index: baseIndex + 1 + newTabCount } } }] }) });
           const addData = await addRes.json();
-          if (!addRes.ok) throw new Error(addData.error?.message || `Could not create tab "${tabName}".`);
+          log('AddSheet status:', addRes.status, addRes.ok ? 'OK' : JSON.stringify(addData.error));
+          if (!addRes.ok) fail('Step addSheet "' + tabName + '": ' + (addData.error?.message || 'unknown'));
           newTabCount++;
         }
 
-        // Write header + data rows
         const values = [['FirstName','Email'], ...card.rows.map(r => [r.FirstName||'', r.Email||''])];
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName + '!A1')}?valueInputOption=RAW`,
+        const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName + '!A1')}?valueInputOption=RAW`,
           { method: 'PUT', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ values }) });
+        const writeData = await writeRes.json();
+        log('Write status:', writeRes.status, writeRes.ok ? 'OK' : JSON.stringify(writeData.error));
+        if (!writeRes.ok) fail('Step write "' + tabName + '": ' + (writeData.error?.message || 'unknown'));
 
-        // Mark card as pushed
         const pushNote = document.getElementById('push_' + card.uid);
         if (pushNote) { pushNote.textContent = `✓ Pushed to MailMerge sheet as "${tabName}"`; pushNote.className = 'push-status ok'; }
       }
+      log('All done!');
     } catch(e) {
+      console.error('[MailMerge] Failed:', e.message);
       document.querySelectorAll('.push-status').forEach(el => { el.textContent = '✗ Push failed: ' + e.message; el.className = 'push-status err'; });
     }
   }
