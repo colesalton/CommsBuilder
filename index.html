@@ -315,10 +315,6 @@
           <option value="">— Select your campus Integrated List —</option>
         </select>
         <div class="sheet-status" id="sheetStatus"></div>
-        <select id="mailMergeSelect" onchange="onMailMergeSelect()" style="margin-top:10px;">
-          <option value="">— Select your MailMerge sheet (for MailMerge push) —</option>
-        </select>
-        <div class="sheet-status" id="mailMergeStatus"></div>
         <div style="margin-top:14px; border-top:1.5px solid #e5e7eb; padding-top:14px;">
           <label style="display:block;font-size:0.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Or paste Sheet URL directly</label>
           <div style="display:flex;gap:8px;">
@@ -411,32 +407,41 @@
 
   <hr class="divider" />
 
-  <!-- Contact Column -->
+  <!-- Output -->
   <div class="field">
-    <label class="field-label">Contact Column</label>
+    <label class="field-label">Output</label>
     <div class="contact-row">
       <div class="contact-option">
-        <input type="radio" name="contact" id="contactCell" value="Cellphone" checked />
+        <input type="radio" name="contact" id="contactCell" value="Cellphone" checked onchange="toggleMailMergeField()" />
         <label for="contactCell">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1"/></svg>
           Adudialer/Spreed
         </label>
       </div>
       <div class="contact-option">
-        <input type="radio" name="contact" id="contactEmail" value="Email" />
+        <input type="radio" name="contact" id="contactEmail" value="Email" onchange="toggleMailMergeField()" />
         <label for="contactEmail">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg>
           MailMerge
         </label>
       </div>
       <div class="contact-option">
-        <input type="radio" name="contact" id="contactCallhub" value="Callhub" />
+        <input type="radio" name="contact" id="contactCallhub" value="Callhub" onchange="toggleMailMergeField()" />
         <label for="contactCallhub">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
           Callhub/DaisyChain
         </label>
       </div>
     </div>
+  </div>
+
+  <!-- MailMerge Sheet selector (shown when MailMerge output is selected) -->
+  <div class="field" id="mailMergeSheetField" style="display:none">
+    <label class="field-label">MailMerge Sheet</label>
+    <select id="mailMergeSelect" onchange="onMailMergeSelect()">
+      <option value="">— Select your MailMerge sheet —</option>
+    </select>
+    <div class="sheet-status" id="mailMergeStatus"></div>
   </div>
 
   <div class="error-msg" id="errorMsg"></div>
@@ -530,6 +535,11 @@
     el.className = 'sheet-status';
     if (mailMergeSheetId) { el.classList.add('visible','ok'); el.textContent = '✓ MailMerge sheet selected'; }
     else { el.innerHTML = ''; }
+  }
+
+  function toggleMailMergeField() {
+    const isMailMerge = document.querySelector('input[name="contact"]:checked')?.value === 'Email';
+    document.getElementById('mailMergeSheetField').style.display = isMailMerge ? '' : 'none';
   }
 
   async function onSheetSelect() {
@@ -998,7 +1008,7 @@
           newTabCount++;
         }
 
-        const values = [['FirstName','Email'], ...card.rows.map(r => [r.FirstName||'', r.Email||''])];
+        const values = [['FirstName','Email','Email Sent'], ...card.rows.map(r => [r.FirstName||'', r.Email||''])];
         const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName + '!A1')}?valueInputOption=RAW`,
           { method: 'PUT', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ values }) });
@@ -1036,10 +1046,17 @@
     const mailMergeCards = []; // collect for push
 
     function addCard(title, rows) {
+      // Exclude rows with blank contact field
+      const filtered = rows.filter(r => {
+        if (contact === 'Email')    return (r.Email     || '').trim() !== '';
+        if (contact === 'Callhub')  return (r.Cellphone || '').trim() !== '';
+        if (contact === 'Cellphone') return (r.Cellphone || '').trim() !== '';
+        return true;
+      });
       const uid  = 'rc_' + Math.random().toString(36).slice(2);
-      const card = buildResultCard(title, rows, contact, uid);
+      const card = buildResultCard(title, filtered, contact, uid);
       section.appendChild(card);
-      if (contact === 'Email') mailMergeCards.push({ title, rows, uid });
+      if (contact === 'Email') mailMergeCards.push({ title, rows: filtered, uid });
     }
 
     if (tutorsOnly) {
