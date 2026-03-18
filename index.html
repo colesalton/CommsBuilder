@@ -1177,18 +1177,20 @@
 
     const mailMergeCards = []; // collect for push
 
-    function addCard(title, rows) {
-      // Exclude rows with blank contact field
-      const filtered = rows.filter(r => {
-        if (contact === 'Email')    return (r.Email     || '').trim() !== '';
-        if (contact === 'Callhub')  return (r.Cellphone || '').trim() !== '';
-        if (contact === 'Cellphone') return (r.Cellphone || '').trim() !== '';
+    function addCard(title, rawRows) {
+      // Filter blanks on raw rows, store originals for tracker
+      const filtered = rawRows.filter(row => {
+        if (contact === 'Email')     return cellVal(row,'Email')     !== '';
+        if (contact === 'Callhub')   return cellVal(row,'Cellphone') !== '';
+        if (contact === 'Cellphone') return cellVal(row,'Cellphone') !== '';
         return true;
       });
+      const processed = filtered.map(buildRow);
       const uid  = 'rc_' + Math.random().toString(36).slice(2);
-      const card = buildResultCard(title, filtered, contact, uid);
+      const card = buildResultCard(title, processed, contact, uid);
+      card.__rawRows = filtered;
       section.appendChild(card);
-      if (contact === 'Email') mailMergeCards.push({ title, rows: filtered, uid });
+      if (contact === 'Email') mailMergeCards.push({ title, rows: processed, uid });
     }
 
     if (tutorsOnly) {
@@ -1196,7 +1198,7 @@
         const rJT = cellVal(row,'JobTypes');
         if (!rJT.includes('Reader/Tutor')) return false;
         return baseFilter([row], null, membership, unit, asecrv26).length > 0;
-      })).map(buildRow);
+      }));
       addCard('Tutors Only', matched);
     } else {
       entries.forEach(entry => {
@@ -1204,15 +1206,13 @@
           const filtered = applyOtherFilters(baseFilter(allRows, [entry.area], membership, unit, asecrv26));
           if (entry.subEntries.length > 0) {
             entry.subEntries.forEach(sub => {
-              const subFiltered = filtered.filter(row => cellVal(row, sub.subCol) === sub.subVal);
-              addCard(`${entry.area} › ${sub.subVal}`, subFiltered.map(buildRow));
+              addCard(`${entry.area} › ${sub.subVal}`, filtered.filter(row => cellVal(row, sub.subCol) === sub.subVal));
             });
           } else {
-            addCard(entry.area, filtered.map(buildRow));
+            addCard(entry.area, filtered);
           }
         } else if (entry.type === 'group') {
-          const filtered = applyOtherFilters(baseFilter(allRows, entry.areas, membership, unit, asecrv26));
-          addCard(entry.name, filtered.map(buildRow));
+          addCard(entry.name, applyOtherFilters(baseFilter(allRows, entry.areas, membership, unit, asecrv26)));
         }
       });
     }
@@ -1256,7 +1256,6 @@
     data.forEach(r => csvLines.push(cols.map(c => `"${(r[c]||'').replace(/"/g,'""')}"`).join(',')));
     const csvContent = csvLines.join('\n');
     card.dataset.csv = csvContent;
-    card.__rowData = data;
 
     let tableHtml = data.length === 0 ? '<div class="empty-note">No rows matched these filters.</div>' :
       `<div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>` +
@@ -1309,16 +1308,72 @@
     });
   }
 
-  function downloadTracker(btn, title) {
+  const TRACKER_HEADERS = ['Outreacher','Date','Result','FullName','Cellphone','PersonID','SuperArea'];
+  const TRACKER_DROPDOWN = ['No Answer, Texted/VM','Followup','Voted','DNC','Wrong Number','Graduated'];
+
+  function trackerRow(r) {
+    const full = (cellVal(r,'FirstName') + ' ' + cellVal(r,'LastName')).trim();
+    return ['', '', '', full, cellVal(r,'Cellphone'), cellVal(r,'PersonID'), cellVal(r,'SuperArea')];
+  }
+
+  async function downloadTracker(btn, title) {
     const card = btn.closest('.result-card');
-    const rows = card.__rowData || [];
-    const trackerCols = ['FirstName','Cellphone','PersonID','SuperArea'];
-    const lines = [trackerCols.join(','),
-      ...rows.map(r => trackerCols.map(c=>`"${(r[c]||'').replace(/"/g,'""')}"`).join(','))
-    ];
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
-    a.download = `${title.replace(/[^a-zA-Z0-9›]+/g,'_')}_tracker.csv`; a.click(); URL.revokeObjectURL(a.href);
+    const rows = card.__rawRows || [];
+    if (accessToken) {
+      await pushTrackerToSheets(title, rows, btn);
+    } else {
+      const lines = [TRACKER_HEADERS.join(','),
+        ...rows.map(r => trackerRow(r).map(v=>`"${v.replace(/"/g,'""')}"`).join(','))];
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+      a.download = `${title.replace(/[^a-zA-Z0-9›]+/g,'_')}_tracker.csv`;
+      a.click(); URL.revokeObjectURL(a.href);
+    }
+  }
+
+  async function pushTrackerToSheets(title, rows, btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Creating…'; btn.disabled = true;
+    try {
+      const d = new Date();
+      const dateStr = `${d.getMonth()+1}-${d.getDate()}-${d.getFullYear()}`;
+      const sheetTitle = `${dateStr} Phonebank Tracker Sheet`;
+
+      // Create a brand new Google Sheet
+      const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { title: sheetTitle }, sheets: [{ properties: { title: 'Tracker' } }] })
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok) throw new Error(createData.error?.message || 'Could not create sheet');
+      const newSpreadsheetId = createData.spreadsheetId;
+      const tabSheetId = createData.sheets[0].properties.sheetId;
+
+      // Write data
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${newSpreadsheetId}/values/Tracker!A1?valueInputOption=RAW`, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [TRACKER_HEADERS, ...rows.map(trackerRow)] })
+      });
+
+      // Add Result dropdown validation (column C, rows 2+)
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${newSpreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ setDataValidation: { range: {
+          sheetId: tabSheetId, startRowIndex: 1, endRowIndex: rows.length + 1, startColumnIndex: 2, endColumnIndex: 3
+        }, rule: { condition: { type: 'ONE_OF_LIST', values: TRACKER_DROPDOWN.map(v => ({ userEnteredValue: v })) },
+          showCustomUi: true, strict: false } } }] })
+      });
+
+      btn.textContent = '✓ Open Sheet';
+      btn.disabled = false;
+      btn.onclick = () => window.open(`https://docs.google.com/spreadsheets/d/${newSpreadsheetId}`, '_blank');
+    } catch(e) {
+      btn.textContent = '✗ Failed'; btn.disabled = false;
+      showError('Tracker creation failed: ' + e.message);
+    }
   }
 
   function downloadAllCsvs(contact) {
