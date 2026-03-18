@@ -456,20 +456,7 @@
   let entries     = [];       // staging entries
   let expandState = null;     // { parentId, col, selected: Set, searchQ: '' }
 
-  const SA_OPTIONS = [
-    'AATC','Ag and Resource Economics','Agriculture','Anthropology','Art','Art History',
-    'Biology','Biophysics','Chemistry','Civil and Environmental Engineering','Communication',
-    'Community Development','CS and ECE','Cultural Studies','Earth and Planetary Sciences',
-    'Economics','Education','Energy Systems','English','Env Policy and Management',
-    'Fine Arts','Forensic Science','Geography','History','Human Development','Human Ecology',
-    'International Agricultural Development','Languages','Law','Linguistics','Management',
-    'Mathematics','Mechanical and Aerospace Engineering','Med Campus','MSE and ChemE',
-    'Neuroscience','Philosophy','Physics','Plants','Political Science','Psychology',
-    'Public Health','Religion','Sociology','Spanish','Statistics',
-    'Transportation Technology and Policy','UCD Area Unknown',
-    'UCD Health Public Health Sciences','UCD Medical Center',
-    'UCD Research and Policy','UCD School of Law','Water and Atmosphere'
-  ];
+  let SA_OPTIONS = [];
 
   function nextId() { return 'e' + (++idSeq); }
   const cellVal = (row, col) => String(row[col] || '').trim();
@@ -485,7 +472,7 @@
 
   // ── Google Live Sync ───────────────────────────────────────
   function signInGoogle() {
-   if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('YOUR_CLIENT_ID')) {
+    if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith('YOUR_CLIENT_ID')) {
       showError('Live Sync not yet configured — paste your Google Client ID into the HTML, or use Upload File mode.');
       return;
     }
@@ -528,6 +515,7 @@
       if (!data.values || data.values.length < 2) throw new Error(`Tab "${TARGET_TAB}" is empty or not found.`);
       const [headers, ...rows] = data.values;
       allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
+      buildSAList(allRows);
       setSheetStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows`);
     } catch(e) { setSheetStatus('err', 'Error: ' + e.message); allRows = null; }
   }
@@ -560,6 +548,7 @@
       if (!data.values || data.values.length < 2) throw new Error(`Tab "${TARGET_TAB}" is empty or not found.`);
       const [headers, ...rows] = data.values;
       allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
+      buildSAList(allRows);
       setUrlStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows from "${TARGET_TAB}"`);
     } catch(e) { setUrlStatus('err', 'Error: ' + e.message); allRows = null; }
   }
@@ -594,6 +583,7 @@
         const wb = XLSX.read(e.target.result, { type: 'array' });
         if (!wb.SheetNames.includes(TARGET_TAB)) { showError(`Sheet "${TARGET_TAB}" not found. Available: ${wb.SheetNames.join(', ')}`); return; }
         allRows = XLSX.utils.sheet_to_json(wb.Sheets[TARGET_TAB], { defval: '' });
+        buildSAList(allRows);
         dropZone.classList.add('loaded');
         document.getElementById('dzLabel').textContent = `✓ ${file.name} (${allRows.length.toLocaleString()} rows)`;
       } catch(err) { showError('Could not read file: ' + err.message); }
@@ -610,13 +600,27 @@
 
   // ── SA picker ─────────────────────────────────────────────
   const saListEl = document.getElementById('saList');
-  SA_OPTIONS.forEach(opt => {
-    const item = document.createElement('div');
-    item.className = 'sa-item'; item.dataset.value = opt;
-    item.innerHTML = `<div class="sa-check"></div><span>${opt}</span>`;
-    item.addEventListener('click', () => toggleSA(opt, item));
-    saListEl.appendChild(item);
-  });
+
+  function buildSAList(rows) {
+    const vals = new Set();
+    let hasBlank = false;
+    rows.forEach(row => {
+      const v = String(row['SuperArea']||'').trim();
+      if (v) vals.add(v); else hasBlank = true;
+    });
+    SA_OPTIONS = [...vals].sort();
+    if (hasBlank) SA_OPTIONS.push('(Blank)');
+    entries = []; expandState = null;
+    saListEl.innerHTML = '';
+    SA_OPTIONS.forEach(opt => {
+      const item = document.createElement('div');
+      item.className = 'sa-item'; item.dataset.value = opt;
+      item.innerHTML = `<div class="sa-check"></div><span>${opt}</span>`;
+      item.addEventListener('click', () => toggleSA(opt, item));
+      saListEl.appendChild(item);
+    });
+    renderStaging(); updateSACount();
+  }
 
   function toggleSA(val, el) {
     if (el.classList.contains('checked')) {
@@ -645,7 +649,7 @@
 
   function updateSACount() {
     document.getElementById('saCount').textContent =
-      SA_OPTIONS.filter(o => saListEl.querySelector(`[data-value="${CSS.escape(o)}"]`)?.classList.contains('checked')).length;
+      saListEl.querySelectorAll('.sa-item.checked').length;
   }
 
   function filterSA() {
@@ -900,7 +904,7 @@
     return rows.filter(row => {
       const rSA = cellVal(row,'SuperArea'), rM = cellVal(row,'Membership'),
             rU  = cellVal(row,'Unit'),      rAV = cellVal(row,'ASECRV26');
-      if (areas && !areas.includes(rSA)) return false;
+      if (areas && !areas.includes(rSA) && !(areas.includes('(Blank)') && rSA === '')) return false;
       if (membership === 'nonmembers') { if (rM === 'Y' || rM === 'DNC') return false; }
       else { if (rM !== membership) return false; }
       if      (unit === 'ASE')  { if (rU.includes('AR') || rU.includes('PD')) return false; }
