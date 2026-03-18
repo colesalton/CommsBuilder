@@ -340,7 +340,7 @@
     <div class="toggle-switch"><div class="toggle-knob"></div></div>
     <div class="toggle-text">
       <div class="toggle-label">Tutors Only</div>
-      <div class="toggle-desc">Returns all AATC workers + all workers with "Reader/Tutor" in JobTypes</div>
+      <div class="toggle-desc">Returns all workers with "Reader/Tutor" in their JobTypes</div>
     </div>
   </div>
 
@@ -384,7 +384,7 @@
   </div>
 
   <!-- Unit -->
-  <div class="field">
+  <div class="field" id="unitField">
     <label class="field-label" for="unit">Unit <span class="badge">ASE = all non-AR/PD</span></label>
     <select id="unit">
       <option value="">— Select Unit —</option>
@@ -602,6 +602,7 @@
     tutorsOnly = !tutorsOnly;
     document.getElementById('tutorsToggle').classList.toggle('active', tutorsOnly);
     document.getElementById('superAreaField').style.display = tutorsOnly ? 'none' : '';
+    document.getElementById('unitField').style.display      = tutorsOnly ? 'none' : '';
   }
 
   // ── SA picker ─────────────────────────────────────────────
@@ -1013,7 +1014,7 @@
     if (tutorsOnly) {
       const matched = allRows.filter(row => {
         const rSA = cellVal(row,'SuperArea'), rJT = cellVal(row,'JobTypes');
-        if (rSA !== 'AATC' && !rJT.includes('Reader/Tutor')) return false;
+        if (!rJT.includes('Reader/Tutor')) return false;
         return baseFilter([row], null, membership, unit, asecrv26).length > 0;
       }).map(buildRow);
       addCard('Tutors Only', matched);
