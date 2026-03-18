@@ -247,6 +247,12 @@
     #resultsSection.visible { display: flex; }
     .result-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.09); padding: 28px 32px; }
     .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .push-status { font-size: 0.8rem; font-weight: 600; padding: 6px 12px; border-radius: 6px; margin-bottom: 10px; }
+    .push-status:empty { display: none; }
+    .push-status.loading { background: #eff6ff; color: #2563eb; }
+    .push-status.ok  { background: #f0fdf4; color: #16a34a; }
+    .push-status.err { background: #fef2f2; color: #dc2626; }
+    .push-status.warn { background: #fffbeb; color: #d97706; }
     .result-title { font-size: 1rem; font-weight: 700; color: #111827; }
     .result-meta { display: flex; align-items: center; gap: 8px; }
     .result-count { font-size: 0.78rem; font-weight: 600; background: #eff6ff; color: #2563eb; border-radius: 20px; padding: 3px 11px; }
@@ -439,7 +445,7 @@
   // ── Google config ──────────────────────────────────────────
   // Replace with your Client ID after Google Cloud setup:
   const GOOGLE_CLIENT_ID = '652307992213-a9gk2h2hp942ucld9d77frg6dtchn2ft.apps.googleusercontent.com';
-  const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.metadata.readonly';
+  const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly';
   const TARGET_TAB = 'Integrated UC-UAW List';
   const DRILL_COLS = [
     { key: 'Area',         label: 'Area' },
@@ -499,7 +505,7 @@
       const sel = document.getElementById('sheetSelect');
       sel.innerHTML = '<option value="">— Select your campus Integrated List —</option>';
       (data.files || []).forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.name; sel.appendChild(o); });
-      setSheetStatus(data.files?.length ? 'ok' : 'err', data.files?.length ? `Found ${data.files.length} sheet(s) — select yours below.` : 'No Integrated List sheets found in your Drive.');
+      setSheetStatus(data.files?.length ? 'ok' : 'err', data.files?.length ? `Found ${data.files.length} sheet(s) — select yours above.` : 'No Integrated List sheets found in your Drive.');
     } catch(e) { setSheetStatus('err', 'Error: ' + e.message); }
   }
 
@@ -917,6 +923,67 @@
     });
   }
 
+  // ── MailMerge → Google Sheets push ─────────────────────────
+  function makeTabName(title, membership, unit) {
+    const mem = membership === 'Y' ? 'Members' : 'Non-Members';
+    const un  = unit === 'PDAR' ? 'PD & AR' : unit;
+    const name = `${title} - ${mem} - ${un}`;
+    return name.length > 100 ? name.substring(0, 97) + '…' : name;
+  }
+
+  async function pushToMailMerge(resultCards, membership, unit) {
+    try {
+      // Find MailMerge sheet
+      const q = encodeURIComponent("name contains 'MailMerge' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+      const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&orderBy=name&includeItemsFromAllDrives=true&supportsAllDrives=true`,
+        { headers: { Authorization: 'Bearer ' + accessToken } });
+      const driveData = await driveRes.json();
+      if (!driveData.files || driveData.files.length === 0) throw new Error('No sheet with "MailMerge" in the title found in your Google Drive.');
+      const mmId = driveData.files[0].id;
+
+      // Get existing tabs
+      const infoRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}?fields=sheets.properties`,
+        { headers: { Authorization: 'Bearer ' + accessToken } });
+      const infoData = await infoRes.json();
+      if (!infoRes.ok) throw new Error(infoData.error?.message || 'Could not access MailMerge sheet.');
+      const existingSheets = infoData.sheets;
+      const testSheet = existingSheets.find(s => s.properties.title.toLowerCase() === 'test');
+      const baseIndex  = testSheet ? testSheet.properties.index : 0;
+
+      let newTabCount = 0;
+      for (const card of resultCards) {
+        const tabName  = makeTabName(card.title, membership, unit);
+        const existing = existingSheets.find(s => s.properties.title === tabName);
+
+        if (existing) {
+          // Clear existing tab
+          await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName)}:clear`,
+            { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken } });
+        } else {
+          // Create new tab after "test"
+          const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}:batchUpdate`,
+            { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName, index: baseIndex + 1 + newTabCount } } }] }) });
+          const addData = await addRes.json();
+          if (!addRes.ok) throw new Error(addData.error?.message || `Could not create tab "${tabName}".`);
+          newTabCount++;
+        }
+
+        // Write header + data rows
+        const values = [['FirstName','Email'], ...card.rows.map(r => [r.FirstName||'', r.Email||''])];
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${mmId}/values/${encodeURIComponent(tabName + '!A1')}?valueInputOption=RAW`,
+          { method: 'PUT', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ values }) });
+
+        // Mark card as pushed
+        const pushNote = document.getElementById('push_' + card.uid);
+        if (pushNote) { pushNote.textContent = `✓ Pushed to MailMerge sheet as "${tabName}"`; pushNote.className = 'push-status ok'; }
+      }
+    } catch(e) {
+      document.querySelectorAll('.push-status').forEach(el => { el.textContent = '✗ Push failed: ' + e.message; el.className = 'push-status err'; });
+    }
+  }
+
   function runQuery() {
     hideError();
     if (!allRows) { showError('No data loaded. Connect with Google (Live Sync) or upload a .xlsx file.'); return; }
@@ -934,13 +1001,22 @@
     const section = document.getElementById('resultsSection');
     section.innerHTML = ''; section.classList.add('visible');
 
+    const mailMergeCards = []; // collect for push
+
+    function addCard(title, rows) {
+      const uid  = 'rc_' + Math.random().toString(36).slice(2);
+      const card = buildResultCard(title, rows, contact, uid);
+      section.appendChild(card);
+      if (contact === 'Email') mailMergeCards.push({ title, rows, uid });
+    }
+
     if (tutorsOnly) {
       const matched = allRows.filter(row => {
         const rSA = cellVal(row,'SuperArea'), rJT = cellVal(row,'JobTypes');
         if (rSA !== 'AATC' && !rJT.includes('Reader/Tutor')) return false;
         return baseFilter([row], null, membership, unit, asecrv26).length > 0;
       }).map(buildRow);
-      section.appendChild(buildResultCard('Tutors Only', matched, contact));
+      addCard('Tutors Only', matched);
     } else {
       entries.forEach(entry => {
         if (entry.type === 'single') {
@@ -948,26 +1024,43 @@
           if (entry.subEntries.length > 0) {
             entry.subEntries.forEach(sub => {
               const subFiltered = filtered.filter(row => cellVal(row, sub.subCol) === sub.subVal);
-              section.appendChild(buildResultCard(`${entry.area} › ${sub.subVal}`, subFiltered.map(buildRow), contact));
+              addCard(`${entry.area} › ${sub.subVal}`, subFiltered.map(buildRow));
             });
           } else {
-            section.appendChild(buildResultCard(entry.area, filtered.map(buildRow), contact));
+            addCard(entry.area, filtered.map(buildRow));
           }
         } else if (entry.type === 'group') {
           const filtered = baseFilter(allRows, entry.areas, membership, unit, asecrv26);
-          section.appendChild(buildResultCard(entry.name, filtered.map(buildRow), contact));
+          addCard(entry.name, filtered.map(buildRow));
         }
       });
     }
+
+    if (contact === 'Email' && mailMergeCards.length > 0) {
+      if (!accessToken) {
+        mailMergeCards.forEach(c => {
+          const el = document.getElementById('push_' + c.uid);
+          if (el) { el.textContent = 'Connect with Google to push to MailMerge sheet.'; el.className = 'push-status warn'; }
+        });
+      } else {
+        mailMergeCards.forEach(c => {
+          const el = document.getElementById('push_' + c.uid);
+          if (el) { el.textContent = 'Pushing to MailMerge sheet…'; el.className = 'push-status loading'; }
+        });
+        pushToMailMerge(mailMergeCards, membership, unit);
+      }
+    }
+
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ── Result card ────────────────────────────────────────────
   const CALLHUB_COLS = ['SuperArea','Cellphone','FirstName','LastName','Email'];
 
-  function buildResultCard(title, data, contact) {
+  function buildResultCard(title, data, contact, uid) {
+    uid = uid || ('rc_' + Math.random().toString(36).slice(2));
     const card = document.createElement('div'); card.className = 'result-card';
-    const cols = contact === 'Callhub' ? CALLHUB_COLS : ['FirstName', contact];
+    const cols = contact === 'Callhub' ? CALLHUB_COLS : ['FirstName', contact === 'Email' ? 'Email' : contact];
     const csvLines = [cols.join(',')];
     data.forEach(r => csvLines.push(cols.map(c => `"${(r[c]||'').replace(/"/g,'""')}"`).join(',')));
     const csvContent = csvLines.join('\n');
@@ -978,8 +1071,8 @@
       data.map(r => '<tr>' + cols.map(c => { const v = r[c]||''; return `<td>${v||'<span class="no-data">—</span>'}</td>`; }).join('') + '</tr>').join('') +
       '</tbody></table></div>';
 
-    const uid = 'rc_' + Math.random().toString(36).slice(2);
     const safeTitle = title.replace(/'/g,"\\'");
+    const pushBar = contact === 'Email' ? `<div class="push-status" id="push_${uid}"></div>` : '';
     card.innerHTML = `
       <div class="result-header">
         <div class="result-title">${title}</div>
@@ -991,6 +1084,7 @@
           </div>
         </div>
       </div>
+      ${pushBar}
       <div id="${uid}_table">${tableHtml}</div>
       <div id="${uid}_csv" class="csv-scroll">${csvContent}</div>
       ${data.length>0?`<button class="btn-download" onclick="downloadCsv(this,'${safeTitle}','${contact}')"><svg viewBox="0 0 24 24"><path d="M12 16l-4-4h3V4h2v8h3l-4 4zm-7 4v-2h14v2H5z"/></svg>Download CSV</button>`:''}`;
