@@ -485,7 +485,7 @@
 
   // ── Google Live Sync ───────────────────────────────────────
   function signInGoogle() {
-    if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com') {
+    if (GOOGLE_CLIENT_ID === '652307992213-a9gk2h2hp942ucld9d77frg6dtchn2ft.apps.googleusercontent.com') {
       showError('Live Sync not yet configured — paste your Google Client ID into the HTML, or use Upload File mode.');
       return;
     }
@@ -495,7 +495,7 @@
         client_id: GOOGLE_CLIENT_ID, scope: GOOGLE_SCOPES, callback: handleToken
       });
     }
-    tokenClient.requestAccessToken({ prompt: '' });
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
   }
 
   async function handleToken(resp) {
