@@ -224,7 +224,7 @@
     .contact-option label svg { width: 16px; height: 16px; }
 
     /* Tutors toggle */
-    .tutors-toggle { display: flex; align-items: center; gap: 14px; padding: 13px 16px; margin-bottom: 20px; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; cursor: pointer; user-select: none; transition: all 0.15s; }
+    .tutors-toggle { display: flex; align-items: center; gap: 14px; padding: 13px 16px; margin-bottom: 12px; border: 1.5px solid #e5e7eb; border-radius: 10px; background: #f9fafb; cursor: pointer; user-select: none; transition: all 0.15s; }
     .tutors-toggle:hover { border-color: #f59e0b; background: #fffbeb; }
     .tutors-toggle.active { border-color: #f59e0b; background: #fffbeb; }
     .toggle-switch { width: 38px; height: 22px; background: #d1d5db; border-radius: 11px; flex-shrink: 0; position: relative; transition: background 0.2s; }
@@ -236,6 +236,19 @@
     .tutors-toggle.active .toggle-label { color: #92400e; }
     .toggle-desc { font-size: 0.77rem; color: #9ca3af; margin-top: 1px; }
     .tutors-toggle.active .toggle-desc { color: #b45309; }
+    .nonvoters-toggle:hover { border-color: #7c3aed; background: #f5f3ff; }
+    .nonvoters-toggle.active { border-color: #7c3aed; background: #f5f3ff; }
+    .nonvoters-toggle.active .toggle-switch { background: #7c3aed; }
+    .nonvoters-toggle.active .toggle-label { color: #4c1d95; }
+    .nonvoters-toggle.active .toggle-desc { color: #6d28d9; }
+    .davis-toggle { margin-left: 24px; border-style: dashed; }
+    .davis-toggle:hover { border-color: #0d9488; background: #f0fdfa; }
+    .davis-toggle.active { border-color: #0d9488; background: #f0fdfa; border-style: solid; }
+    .davis-toggle.active .toggle-switch { background: #0d9488; }
+    .davis-toggle.active .toggle-label { color: #134e4a; }
+    .davis-toggle.active .toggle-desc { color: #0f766e; }
+    .btn-generate { background: #7c3aed; margin-top: 8px; }
+    .btn-generate:hover { background: #6d28d9; }
 
     /* Run button */
     .btn-run { width: 100%; padding: 13px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.15s; margin-top: 8px; }
@@ -273,9 +286,15 @@
     .btn-download { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; background: #16a34a; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .btn-download:hover { background: #15803d; }
     .btn-download svg { width: 14px; height: 14px; fill: #fff; }
-    .btn-download-all { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; margin-bottom: 18px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+    .results-top-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+    .btn-download-all { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s; }
     .btn-download-all:hover { background: #1d4ed8; }
     .btn-download-all svg { width: 15px; height: 15px; fill: #fff; }
+    .btn-create-tracker { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; background: #0d9488; color: #fff; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+    .btn-create-tracker:hover { background: #0f766e; }
+    .btn-create-tracker svg { width: 15px; height: 15px; fill: #fff; }
+    .tracker-link { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; background: #f0fdfa; color: #0f766e; border: 1.5px solid #99f6e4; border-radius: 8px; font-size: 0.88rem; font-weight: 700; text-decoration: none; }
+    .tracker-link:hover { background: #ccfbf1; }
     .btn-split { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; margin-left: 8px; background: #0891b2; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .btn-split:hover { background: #0e7490; }
     .btn-tracker { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; margin-left: 8px; background: #7c3aed; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
@@ -356,6 +375,24 @@
     </div>
   </div>
 
+  <!-- Nonvoters in Voters' Area -->
+  <div class="tutors-toggle nonvoters-toggle" id="nonvotersToggle" onclick="toggleNonvoters()">
+    <div class="toggle-switch"><div class="toggle-knob"></div></div>
+    <div class="toggle-text">
+      <div class="toggle-label">Nonvoters in Voters' Area</div>
+      <div class="toggle-desc">Generates a sheet matching each voter to uncontacted members in their Area and PI</div>
+    </div>
+  </div>
+
+  <!-- Davis — DeptEnrolled (only shown in nonvoters mode) -->
+  <div class="tutors-toggle davis-toggle" id="davisToggle" onclick="toggleDavis()" style="display:none">
+    <div class="toggle-switch"><div class="toggle-knob"></div></div>
+    <div class="toggle-text">
+      <div class="toggle-label">Davis — DeptEnrolled?</div>
+      <div class="toggle-desc">For Chemistry, Biology, MSE &amp; ChemE, MAE, and Earth &amp; Planetary Sciences: match nonvoters by DeptEnrolled and Cohort instead of Area and PI</div>
+    </div>
+  </div>
+
   <!-- Tutors Only -->
   <div class="tutors-toggle" id="tutorsToggle" onclick="toggleTutors()">
     <div class="toggle-switch"><div class="toggle-knob"></div></div>
@@ -396,7 +433,7 @@
   </div>
 
   <!-- Membership -->
-  <div class="field">
+  <div class="field" id="membershipField">
     <label class="field-label" for="membership">Membership</label>
     <select id="membership">
       <option value="">— Select Membership —</option>
@@ -419,7 +456,7 @@
   </div>
 
   <!-- ASECRV26 -->
-  <div class="field">
+  <div class="field" id="asecrv26Field">
     <label class="field-label" for="asecrv26">ASECRV26</label>
     <select id="asecrv26">
       <option value="">— Select ASECRV26 —</option>
@@ -448,7 +485,7 @@
   <hr class="divider" />
 
   <!-- Output -->
-  <div class="field">
+  <div class="field" id="outputField">
     <label class="field-label">Output</label>
     <div class="contact-row">
       <div class="contact-option">
@@ -485,7 +522,9 @@
   </div>
 
   <div class="error-msg" id="errorMsg"></div>
-  <button class="btn-run" onclick="runQuery()">Run Query</button>
+  <button class="btn-run" id="btnRunQuery" onclick="runQuery()">Run Query</button>
+  <button class="btn-run btn-generate" id="btnGenerateSheet" onclick="generateNonvotersSheet()" style="display:none">Generate Sheet</button>
+  <div id="nonvotersResult" style="display:none; margin-top:10px;"></div>
 </div>
 
 <div id="resultsSection"></div>
@@ -508,7 +547,9 @@
   let tokenClient      = null;
   let mailMergeSheetId = null;
   let idSeq       = 0;
-  let tutorsOnly  = false;
+  let tutorsOnly     = false;
+  let nonvotersMode  = false;
+  let davisMode      = false;
   let entries     = [];       // staging entries
   let expandState = null;     // { parentId, col, selected: Set, searchQ: '' }
 
@@ -676,6 +717,102 @@
     document.getElementById('tutorsToggle').classList.toggle('active', tutorsOnly);
     document.getElementById('superAreaField').style.display = tutorsOnly ? 'none' : '';
     document.getElementById('unitField').style.display      = tutorsOnly ? 'none' : '';
+  }
+
+  // ── Nonvoters mode ─────────────────────────────────────────
+  const NONVOTERS_HIDE = ['tutorsToggle','superAreaField','membershipField','unitField','asecrv26Field','otherFiltersField','outputField','mailMergeSheetField'];
+
+  function toggleNonvoters() {
+    nonvotersMode = !nonvotersMode;
+    document.getElementById('nonvotersToggle').classList.toggle('active', nonvotersMode);
+    NONVOTERS_HIDE.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = nonvotersMode ? 'none' : '';
+    });
+    document.getElementById('davisToggle').style.display      = nonvotersMode ? '' : 'none';
+    document.getElementById('btnRunQuery').style.display      = nonvotersMode ? 'none' : '';
+    document.getElementById('btnGenerateSheet').style.display = nonvotersMode ? '' : 'none';
+    if (!nonvotersMode) {
+      davisMode = false;
+      document.getElementById('davisToggle').classList.remove('active');
+      document.getElementById('nonvotersResult').style.display = 'none';
+      document.getElementById('nonvotersResult').innerHTML = '';
+      toggleMailMergeField();
+    }
+  }
+
+  function toggleDavis() {
+    davisMode = !davisMode;
+    document.getElementById('davisToggle').classList.toggle('active', davisMode);
+  }
+
+  async function generateNonvotersSheet() {
+    if (!allRows) { showError('Load data first.'); return; }
+    if (!accessToken) { showError('Connect with Google to generate a sheet.'); return; }
+    const btn = document.getElementById('btnGenerateSheet');
+    btn.textContent = 'Generating…'; btn.disabled = true;
+    try {
+      const DAVIS_DEPT_AREAS = new Set(['Chemistry','Biology','MSE and ChemE','Mechanical and Aerospace Engineering','Earth and Planetary Sciences']);
+      const isASE = row => { const u = cellVal(row,'Unit'); return !u.includes('AR') && !u.includes('PD'); };
+      const voters    = allRows.filter(r => cellVal(r,'ASECRV26') === 'Voted');
+      const nonvoters = allRows.filter(r => cellVal(r,'Membership') === 'Y' && cellVal(r,'ASECRV26') === '' && isASE(r));
+      voters.sort((a,b) => cellVal(a,'SuperArea').localeCompare(cellVal(b,'SuperArea')));
+
+      const headers = ['Full Name','Expand to see nonvoters','SuperArea','Area / DeptEnrolled','Cohort','PI','Nonvoters in Their Area'];
+      const rawData = voters.map(voter => {
+        const superArea = cellVal(voter,'SuperArea');
+        const area      = cellVal(voter,'Area');
+        const cohort    = cellVal(voter,'Cohort');
+        const pi        = cellVal(voter,'PI');
+        const dept      = cellVal(voter,'DeptEnrolled');
+        const useDept   = davisMode && DAVIS_DEPT_AREAS.has(superArea);
+        let matched;
+        if (useDept) {
+          matched = nonvoters.filter(nv => dept && cellVal(nv,'DeptEnrolled') === dept && cohort && cellVal(nv,'Cohort') === cohort);
+        } else {
+          const seen = new Set();
+          matched = [];
+          const addUniq = nv => { const id = cellVal(nv,'PersonID')||(cellVal(nv,'FirstName')+cellVal(nv,'LastName')); if (!seen.has(id)){ seen.add(id); matched.push(nv); }};
+          if (area) nonvoters.filter(nv => cellVal(nv,'Area') === area).forEach(addUniq);
+          if (pi)   nonvoters.filter(nv => cellVal(nv,'PI')   === pi).forEach(addUniq);
+        }
+        const nvList = matched.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
+        return [`${cellVal(voter,'FirstName')} ${cellVal(voter,'LastName')}`.trim(), superArea, useDept ? dept : area, cohort, pi, nvList];
+      });
+      // Build rows: A=Name, B=checkbox, C-G=IF formulas, H-L=hidden raw data
+      const data = rawData.map((r, i) => {
+        const row = i + 2;
+        return [r[0], false,
+          `=IF($B${row},H${row},"")`, `=IF($B${row},I${row},"")`,
+          `=IF($B${row},J${row},"")`, `=IF($B${row},K${row},"")`,
+          `=IF($B${row},L${row},"")`,
+          r[1], r[2], r[3], r[4], r[5]];
+      });
+
+      const createRes  = await fetch('https://sheets.googleapis.com/v4/spreadsheets', { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ properties:{ title:"Nonvoters in voters' area" }, sheets:[{ properties:{ title:'Voters' } }] }) });
+      const createData = await createRes.json();
+      if (!createRes.ok) throw new Error(createData.error?.message || 'Could not create sheet');
+      const sheetId = createData.spreadsheetId;
+      const tabId   = createData.sheets[0].properties.sheetId;
+
+      const wr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Voters!A1?valueInputOption=USER_ENTERED`, { method:'PUT', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ values:[headers,...data] }) });
+      if (!wr.ok) throw new Error((await wr.json()).error?.message || 'Write failed');
+
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ requests:[
+        { setDataValidation:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:1, endColumnIndex:2 }, rule:{ condition:{ type:'BOOLEAN' }, showCustomUi:true } }},
+        { repeatCell:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:6, endColumnIndex:7 }, cell:{ userEnteredFormat:{ wrapStrategy:'WRAP' } }, fields:'userEnteredFormat.wrapStrategy' }},
+        { updateSheetProperties:{ properties:{ sheetId:tabId, gridProperties:{ frozenRowCount:1 } }, fields:'gridProperties.frozenRowCount' }},
+        { updateDimensionProperties:{ range:{ sheetId:tabId, dimension:'COLUMNS', startIndex:7, endIndex:12 }, properties:{ hiddenByUser:true }, fields:'hiddenByUser' }}
+      ]})});
+
+      btn.textContent = 'Generate Sheet'; btn.disabled = false;
+      const res = document.getElementById('nonvotersResult');
+      res.innerHTML = `<a href="https://docs.google.com/spreadsheets/d/${sheetId}" target="_blank" class="tracker-link"><svg viewBox="0 0 24 24" width="15" height="15" fill="#0f766e"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Open: Nonvoters in Voters' Area (${data.length} voters)</a>`;
+      res.style.display = '';
+    } catch(e) {
+      btn.textContent = 'Generate Sheet'; btn.disabled = false;
+      showError('Generation failed: ' + e.message);
+    }
   }
 
   // ── SA picker ─────────────────────────────────────────────
@@ -1232,15 +1369,28 @@
       }
     }
 
-    // Add "Download All" button if more than one card
+    // Add top buttons row
     const cards = section.querySelectorAll('.result-card');
+    const topBtns = document.createElement('div');
+    topBtns.className = 'results-top-btns';
+
     if (cards.length > 1) {
       const dlAll = document.createElement('button');
       dlAll.className = 'btn-download-all';
       dlAll.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 16l-4-4h3V4h2v8h3l-4 4zm-7 4v-2h14v2H5z"/></svg>Download All CSVs (${cards.length})`;
       dlAll.onclick = () => downloadAllCsvs(contact);
-      section.insertBefore(dlAll, section.firstChild);
+      topBtns.appendChild(dlAll);
     }
+
+    if (contact === 'Cellphone') {
+      const trackerBtn = document.createElement('button');
+      trackerBtn.className = 'btn-create-tracker';
+      trackerBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Create Phonebank Tracker`;
+      trackerBtn.onclick = () => createCombinedTracker(trackerBtn);
+      topBtns.appendChild(trackerBtn);
+    }
+
+    if (topBtns.children.length > 0) section.insertBefore(topBtns, section.firstChild);
 
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -1372,6 +1522,70 @@
       btn.onclick = () => window.open(`https://docs.google.com/spreadsheets/d/${newSpreadsheetId}`, '_blank');
     } catch(e) {
       btn.textContent = '✗ Failed'; btn.disabled = false;
+      showError('Tracker creation failed: ' + e.message);
+    }
+  }
+
+  async function createCombinedTracker(btn) {
+    if (!accessToken) { showError('Connect with Google to create a tracker sheet.'); return; }
+    const cards = [...document.querySelectorAll('#resultsSection .result-card')];
+    if (!cards.length) return;
+
+    const orig = btn.innerHTML;
+    btn.textContent = 'Creating…'; btn.disabled = true;
+
+    try {
+      const today = new Date();
+      const dateStr = `${today.getMonth()+1}-${today.getDate()}-${today.getFullYear()}`;
+      const sheetTitle = `${dateStr} Phonebank Tracker Sheet`;
+
+      const sanitize = s => s.replace(/[\[\]\*\?\/\\:]/g, '-').substring(0, 100);
+      const sheetsConfig = cards.map((card, i) => ({
+        properties: { title: sanitize(card.querySelector('.result-title')?.textContent || `List ${i+1}`), index: i }
+      }));
+
+      const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { title: sheetTitle }, sheets: sheetsConfig })
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok) throw new Error(createData.error?.message || 'Could not create sheet');
+
+      const newSheetId = createData.spreadsheetId;
+      const createdSheets = createData.sheets;
+
+      const valueData = [], batchRequests = [];
+      cards.forEach((card, i) => {
+        const rows = card.__rawRows || [];
+        const tabTitle = createdSheets[i].properties.title;
+        const tabSheetId = createdSheets[i].properties.sheetId;
+        valueData.push({ range: `${tabTitle}!A1`, values: [TRACKER_HEADERS, ...rows.map(trackerRow)] });
+        batchRequests.push({ setDataValidation: {
+          range: { sheetId: tabSheetId, startRowIndex: 1, endRowIndex: Math.max(rows.length + 1, 2), startColumnIndex: 2, endColumnIndex: 3 },
+          rule: { condition: { type: 'ONE_OF_LIST', values: TRACKER_DROPDOWN.map(v => ({ userEnteredValue: v })) }, showCustomUi: true, strict: false }
+        }});
+      });
+
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${newSheetId}/values:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valueInputOption: 'RAW', data: valueData })
+      });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${newSheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: batchRequests })
+      });
+
+      const link = document.createElement('a');
+      link.href = `https://docs.google.com/spreadsheets/d/${newSheetId}`;
+      link.target = '_blank';
+      link.className = 'tracker-link';
+      link.innerHTML = `<svg viewBox="0 0 24 24" width="15" height="15" fill="#0f766e"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Open Tracker Sheet`;
+      btn.replaceWith(link);
+    } catch(e) {
+      btn.innerHTML = orig; btn.disabled = false;
       showError('Tracker creation failed: ' + e.message);
     }
   }
