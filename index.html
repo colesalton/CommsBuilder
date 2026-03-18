@@ -121,6 +121,9 @@
     .btn-group-sel { display: none; padding: 5px 12px; border: none; border-radius: 6px; background: #2563eb; color: #fff; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
     .btn-group-sel:hover { background: #1d4ed8; }
     .btn-group-sel.visible { display: inline-block; }
+    .btn-group-rem { display: none; padding: 5px 12px; border: 1.5px solid #7c3aed; border-radius: 6px; background: #f5f3ff; color: #7c3aed; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .btn-group-rem:hover { background: #7c3aed; color: #fff; }
+    .btn-group-rem.visible { display: inline-block; }
     .staging-list { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 
     /* Chip wrap (holds chip + sub-list + expand panel) */
@@ -270,6 +273,24 @@
     .btn-download { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; background: #16a34a; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .btn-download:hover { background: #15803d; }
     .btn-download svg { width: 14px; height: 14px; fill: #fff; }
+    .btn-download-all { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; margin-bottom: 18px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+    .btn-download-all:hover { background: #1d4ed8; }
+    .btn-download-all svg { width: 15px; height: 15px; fill: #fff; }
+    .btn-split { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; margin-left: 8px; background: #0891b2; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn-split:hover { background: #0e7490; }
+    .btn-tracker { display: inline-flex; align-items: center; gap: 7px; padding: 7px 15px; margin-top: 14px; margin-left: 8px; background: #7c3aed; color: #fff; border: none; border-radius: 7px; font-size: 0.83rem; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn-tracker:hover { background: #6d28d9; }
+    .result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
+    .btn-add-filter { padding: 6px 14px; border: 1.5px dashed #d1d5db; border-radius: 7px; background: #f9fafb; color: #6b7280; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-add-filter:not(:disabled):hover { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
+    .btn-add-filter:disabled { opacity: 0.45; cursor: not-allowed; }
+    .add-filter-panel { margin-top: 10px; border: 1.5px solid #e0e7ff; border-radius: 8px; background: #eef2ff; overflow: hidden; }
+    .add-filter-panel select { width: 100%; padding: 8px 10px; border: none; border-bottom: 1px solid #c7d2fe; background: #e0e7ff; font-size: 0.85rem; font-weight: 600; color: #3730a3; outline: none; }
+    .add-filter-vals { max-height: 180px; overflow-y: auto; padding: 6px 0; }
+    .add-filter-footer { display: flex; gap: 8px; justify-content: flex-end; padding: 8px 12px; background: #e0e7ff; border-top: 1px solid #c7d2fe; }
+    .filter-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #eef2ff; border: 1.5px solid #a5b4fc; border-radius: 20px; font-size: 0.78rem; font-weight: 600; color: #4338ca; }
+    .filter-pill button { border: none; background: none; color: #a5b4fc; font-size: 0.9rem; cursor: pointer; padding: 0; line-height: 1; }
+    .filter-pill button:hover { color: #dc2626; }
     .empty-note { padding: 14px 4px; color: #9ca3af; font-style: italic; font-size: 0.88rem; }
   </style>
 </head>
@@ -366,6 +387,7 @@
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
           <button class="btn-group-all" id="btnGroupAll" onclick="groupAll()">Group all</button>
+          <button class="btn-group-rem" id="btnGroupRem" onclick="groupRemaining()">Group remaining</button>
           <button class="btn-group-sel" id="btnGroupSel" onclick="groupSelected()">＋ Group selected</button>
         </div>
       </div>
@@ -380,6 +402,7 @@
       <option value="">— Select Membership —</option>
       <option value="Y">Y — Member</option>
       <option value="nonmembers">All non-members (except DNC)</option>
+      <option value="alldnc">All workers (except DNC)</option>
     </select>
   </div>
 
@@ -403,6 +426,23 @@
       <option value="blanks">(Blanks) — not yet voted</option>
       <option value="Voted">Voted</option>
     </select>
+  </div>
+
+  <!-- Other Filters -->
+  <div class="field" id="otherFiltersField">
+    <label class="field-label">Additional Filters <span class="badge">Optional</span></label>
+    <div id="otherFilterPills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+    <button class="btn-add-filter" id="btnAddFilter" onclick="openAddFilter()" disabled>＋ Add Additional Filter</button>
+    <div id="addFilterPanel" class="add-filter-panel" style="display:none">
+      <select id="addFilterColSel" onchange="setAddFilterCol(this.value)">
+        <option value="">— Select Column —</option>
+      </select>
+      <div id="addFilterVals" class="add-filter-vals"></div>
+      <div class="add-filter-footer">
+        <button class="btn-exp-cancel" onclick="cancelAddFilter()">Cancel</button>
+        <button class="btn-exp-apply" id="btnApplyFilter" onclick="applyAddFilter()" disabled>Apply</button>
+      </div>
+    </div>
   </div>
 
   <hr class="divider" />
@@ -554,7 +594,7 @@
       if (!data.values || data.values.length < 2) throw new Error(`Tab "${TARGET_TAB}" is empty or not found.`);
       const [headers, ...rows] = data.values;
       allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
-      buildSAList(allRows);
+      buildSAList(allRows); enableAddFilter();
       setSheetStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows`);
     } catch(e) { setSheetStatus('err', 'Error: ' + e.message); allRows = null; }
   }
@@ -587,7 +627,7 @@
       if (!data.values || data.values.length < 2) throw new Error(`Tab "${TARGET_TAB}" is empty or not found.`);
       const [headers, ...rows] = data.values;
       allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
-      buildSAList(allRows);
+      buildSAList(allRows); enableAddFilter();
       setUrlStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows from "${TARGET_TAB}"`);
     } catch(e) { setUrlStatus('err', 'Error: ' + e.message); allRows = null; }
   }
@@ -622,7 +662,7 @@
         const wb = XLSX.read(e.target.result, { type: 'array' });
         if (!wb.SheetNames.includes(TARGET_TAB)) { showError(`Sheet "${TARGET_TAB}" not found. Available: ${wb.SheetNames.join(', ')}`); return; }
         allRows = XLSX.utils.sheet_to_json(wb.Sheets[TARGET_TAB], { defval: '' });
-        buildSAList(allRows);
+        buildSAList(allRows); enableAddFilter();
         dropZone.classList.add('loaded');
         document.getElementById('dzLabel').textContent = `✓ ${file.name} (${allRows.length.toLocaleString()} rows)`;
       } catch(err) { showError('Could not read file: ' + err.message); }
@@ -888,6 +928,22 @@
     const btn = document.getElementById('btnGroupSel');
     if (sel >= 2) { btn.classList.add('visible'); btn.textContent = `＋ Group ${sel} selected`; }
     else btn.classList.remove('visible');
+    const ungrouped = entries.filter(e => e.type === 'single' && e.subEntries.length === 0);
+    const hasGroup  = entries.some(e => e.type === 'group');
+    const remBtn = document.getElementById('btnGroupRem');
+    if (hasGroup && ungrouped.length >= 2) remBtn.classList.add('visible');
+    else remBtn.classList.remove('visible');
+  }
+
+  function groupRemaining() {
+    const ungrouped = entries.filter(e => e.type === 'single' && e.subEntries.length === 0);
+    if (ungrouped.length < 2) return;
+    const areas = ungrouped.map(e => e.area);
+    const name  = areas.slice(0,2).join(' + ') + (areas.length > 2 ? ` +${areas.length-2}` : '');
+    const firstIdx = entries.indexOf(ungrouped[0]);
+    ungrouped.forEach(s => { const i = entries.indexOf(s); if (i !== -1) entries.splice(i,1); });
+    entries.splice(firstIdx, 0, { id: nextId(), type: 'group', name, areas, chipSel: false });
+    renderStaging();
   }
 
   function groupAll() {
@@ -939,6 +995,81 @@
     updateSACount(); renderStaging();
   }
 
+  // ── Other Filters ──────────────────────────────────────────
+  const PRIMARY_COLS = new Set(['SuperArea','Membership','Unit','ASECRV26','FirstName','LastName','Cellphone','Email']);
+  let otherFilters = []; // [{col, vals: Set}]
+  let addFilterSelections = new Set();
+
+  function enableAddFilter() {
+    document.getElementById('btnAddFilter').disabled = false;
+    const sel = document.getElementById('addFilterColSel');
+    sel.innerHTML = '<option value="">— Select Column —</option>';
+    if (!allRows || !allRows[0]) return;
+    Object.keys(allRows[0]).filter(c => !PRIMARY_COLS.has(c)).sort().forEach(c => {
+      const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o);
+    });
+  }
+
+  function openAddFilter() {
+    addFilterSelections = new Set();
+    document.getElementById('addFilterColSel').value = '';
+    document.getElementById('addFilterVals').innerHTML = '';
+    document.getElementById('btnApplyFilter').disabled = true;
+    document.getElementById('addFilterPanel').style.display = '';
+  }
+
+  function setAddFilterCol(col) {
+    addFilterSelections = new Set();
+    document.getElementById('btnApplyFilter').disabled = true;
+    const valsEl = document.getElementById('addFilterVals');
+    if (!col || !allRows) { valsEl.innerHTML = ''; return; }
+    const vals = [...new Set(allRows.map(r => String(r[col]||'').trim()))].sort();
+    valsEl.innerHTML = vals.map(v => {
+      const label = v === '' ? '(Blank)' : v;
+      const key = v === '' ? '(Blank)' : v;
+      return `<div class="exp-item" onclick="toggleAddFilterVal('${key.replace(/'/g,"\\'")}',this)">
+        <div class="exp-check"></div><span class="exp-val">${label}</span></div>`;
+    }).join('');
+  }
+
+  function toggleAddFilterVal(val, el) {
+    if (addFilterSelections.has(val)) { addFilterSelections.delete(val); el.classList.remove('checked'); }
+    else { addFilterSelections.add(val); el.classList.add('checked'); }
+    document.getElementById('btnApplyFilter').disabled = addFilterSelections.size === 0;
+  }
+
+  function applyAddFilter() {
+    const col = document.getElementById('addFilterColSel').value;
+    if (!col || addFilterSelections.size === 0) return;
+    otherFilters = otherFilters.filter(f => f.col !== col);
+    otherFilters.push({ col, vals: new Set(addFilterSelections) });
+    cancelAddFilter();
+    renderFilterPills();
+  }
+
+  function cancelAddFilter() { document.getElementById('addFilterPanel').style.display = 'none'; }
+
+  function removeOtherFilter(col) {
+    otherFilters = otherFilters.filter(f => f.col !== col);
+    renderFilterPills();
+  }
+
+  function renderFilterPills() {
+    const el = document.getElementById('otherFilterPills');
+    el.innerHTML = otherFilters.map(f => {
+      const summary = [...f.vals].slice(0,2).join(', ') + (f.vals.size > 2 ? ` +${f.vals.size-2}` : '');
+      return `<div class="filter-pill"><strong>${f.col}:</strong> ${summary}
+        <button onclick="removeOtherFilter('${f.col.replace(/'/g,"\\'")}')">×</button></div>`;
+    }).join('');
+  }
+
+  function applyOtherFilters(rows) {
+    return otherFilters.reduce((acc, f) => acc.filter(row => {
+      const v = String(row[f.col]||'').trim();
+      return f.vals.has(v) || (f.vals.has('(Blank)') && v === '');
+    }), rows);
+  }
+
   // ── Query engine ───────────────────────────────────────────
   function baseFilter(rows, areas, membership, unit, asecrv26) {
     return rows.filter(row => {
@@ -946,6 +1077,7 @@
             rU  = cellVal(row,'Unit'),      rAV = cellVal(row,'ASECRV26');
       if (areas && !areas.includes(rSA) && !(areas.includes('(Blank)') && rSA === '')) return false;
       if (membership === 'nonmembers') { if (rM === 'Y' || rM === 'DNC') return false; }
+      else if (membership === 'alldnc') { if (rM === 'DNC') return false; }
       else { if (rM !== membership) return false; }
       if      (unit === 'ASE')  { if (rU.includes('AR') || rU.includes('PD')) return false; }
       else if (unit === 'PD')   { if (!rU.includes('PD')) return false; }
@@ -959,7 +1091,7 @@
 
   // ── MailMerge → Google Sheets push ─────────────────────────
   function makeTabName(title, membership, unit) {
-    const mem = membership === 'Y' ? 'Members' : 'Non-Members';
+    const mem = membership === 'Y' ? 'Members' : membership === 'alldnc' ? 'All (excl. DNC)' : 'Non-Members';
     const un  = unit === 'PDAR' ? 'PD & AR' : unit;
     const name = `${title} - ${mem} - ${un}`;
     return name.length > 100 ? name.substring(0, 97) + '…' : name;
@@ -1060,16 +1192,16 @@
     }
 
     if (tutorsOnly) {
-      const matched = allRows.filter(row => {
-        const rSA = cellVal(row,'SuperArea'), rJT = cellVal(row,'JobTypes');
+      const matched = applyOtherFilters(allRows.filter(row => {
+        const rJT = cellVal(row,'JobTypes');
         if (!rJT.includes('Reader/Tutor')) return false;
         return baseFilter([row], null, membership, unit, asecrv26).length > 0;
-      }).map(buildRow);
+      })).map(buildRow);
       addCard('Tutors Only', matched);
     } else {
       entries.forEach(entry => {
         if (entry.type === 'single') {
-          const filtered = baseFilter(allRows, [entry.area], membership, unit, asecrv26);
+          const filtered = applyOtherFilters(baseFilter(allRows, [entry.area], membership, unit, asecrv26));
           if (entry.subEntries.length > 0) {
             entry.subEntries.forEach(sub => {
               const subFiltered = filtered.filter(row => cellVal(row, sub.subCol) === sub.subVal);
@@ -1079,7 +1211,7 @@
             addCard(entry.area, filtered.map(buildRow));
           }
         } else if (entry.type === 'group') {
-          const filtered = baseFilter(allRows, entry.areas, membership, unit, asecrv26);
+          const filtered = applyOtherFilters(baseFilter(allRows, entry.areas, membership, unit, asecrv26));
           addCard(entry.name, filtered.map(buildRow));
         }
       });
@@ -1100,6 +1232,16 @@
       }
     }
 
+    // Add "Download All" button if more than one card
+    const cards = section.querySelectorAll('.result-card');
+    if (cards.length > 1) {
+      const dlAll = document.createElement('button');
+      dlAll.className = 'btn-download-all';
+      dlAll.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 16l-4-4h3V4h2v8h3l-4 4zm-7 4v-2h14v2H5z"/></svg>Download All CSVs (${cards.length})`;
+      dlAll.onclick = () => downloadAllCsvs(contact);
+      section.insertBefore(dlAll, section.firstChild);
+    }
+
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -1114,6 +1256,7 @@
     data.forEach(r => csvLines.push(cols.map(c => `"${(r[c]||'').replace(/"/g,'""')}"`).join(',')));
     const csvContent = csvLines.join('\n');
     card.dataset.csv = csvContent;
+    card.__rowData = data;
 
     let tableHtml = data.length === 0 ? '<div class="empty-note">No rows matched these filters.</div>' :
       `<div class="table-wrap"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>` +
@@ -1136,7 +1279,10 @@
       ${pushBar}
       <div id="${uid}_table">${tableHtml}</div>
       <div id="${uid}_csv" class="csv-scroll">${csvContent}</div>
-      ${data.length>0?`<button class="btn-download" onclick="downloadCsv(this,'${safeTitle}','${contact}')"><svg viewBox="0 0 24 24"><path d="M12 16l-4-4h3V4h2v8h3l-4 4zm-7 4v-2h14v2H5z"/></svg>Download CSV</button>`:''}`;
+      ${data.length>0?`<div class="result-actions">
+        <button class="btn-download" onclick="downloadCsv(this,'${safeTitle}','${contact}')"><svg viewBox="0 0 24 24"><path d="M12 16l-4-4h3V4h2v8h3l-4 4zm-7 4v-2h14v2H5z"/></svg>Download CSV</button>
+        ${contact==='Cellphone'?`<button class="btn-split" onclick="splitCsv(this,'${safeTitle}','${contact}')">Split in ½</button><button class="btn-tracker" onclick="downloadTracker(this,'${safeTitle}')">⬇ Tracker Sheet</button>`:''}
+      </div>`:''}`;
     return card;
   }
 
@@ -1145,6 +1291,48 @@
     document.getElementById(uid+'_csv').style.display   = v==='csv'?'':'none';
     document.getElementById(uid+'_btnT').classList.toggle('active', v==='table');
     document.getElementById(uid+'_btnC').classList.toggle('active', v==='csv');
+  }
+
+  function splitCsv(btn, title, contact) {
+    const content = btn.closest('.result-card').dataset.csv;
+    const lines = content.split('\n').filter(l => l.trim());
+    const header = lines[0];
+    const rows = lines.slice(1);
+    const mid = Math.ceil(rows.length / 2);
+    const base = title.replace(/[^a-zA-Z0-9›]+/g,'_');
+    [[rows.slice(0,mid), 1],[rows.slice(mid), 2]].forEach(([half, n], i) => {
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([[header,...half].join('\n')],{type:'text/csv'}));
+        a.download = `${base}_${contact}_part${n}.csv`; a.click(); URL.revokeObjectURL(a.href);
+      }, i * 400);
+    });
+  }
+
+  function downloadTracker(btn, title) {
+    const card = btn.closest('.result-card');
+    const rows = card.__rowData || [];
+    const trackerCols = ['FirstName','Cellphone','PersonID','SuperArea'];
+    const lines = [trackerCols.join(','),
+      ...rows.map(r => trackerCols.map(c=>`"${(r[c]||'').replace(/"/g,'""')}"`).join(','))
+    ];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+    a.download = `${title.replace(/[^a-zA-Z0-9›]+/g,'_')}_tracker.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  function downloadAllCsvs(contact) {
+    const cards = document.querySelectorAll('#resultsSection .result-card');
+    cards.forEach((card, i) => {
+      setTimeout(() => {
+        const content = card.dataset.csv;
+        const title = card.querySelector('.result-title')?.textContent || ('List_' + (i+1));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([content], { type: 'text/csv' }));
+        a.download = `${title.replace(/[^a-zA-Z0-9›]+/g,'_')}_${contact}.csv`;
+        a.click(); URL.revokeObjectURL(a.href);
+      }, i * 400);
+    });
   }
 
   function downloadCsv(btn, title, contact) {
