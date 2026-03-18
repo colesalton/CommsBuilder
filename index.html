@@ -309,6 +309,14 @@
           <option value="">— Select your campus Integrated List —</option>
         </select>
         <div class="sheet-status" id="sheetStatus"></div>
+        <div style="margin-top:14px; border-top:1.5px solid #e5e7eb; padding-top:14px;">
+          <label style="display:block;font-size:0.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Or paste Sheet URL directly</label>
+          <div style="display:flex;gap:8px;">
+            <input id="sheetUrlInput" type="text" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:0.85rem;color:#111827;outline:none;background:#f9fafb;" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e5e7eb'" />
+            <button onclick="loadFromUrl()" style="padding:9px 14px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:0.83rem;font-weight:600;cursor:pointer;white-space:nowrap;">Load</button>
+          </div>
+          <div class="sheet-status" id="urlStatus" style="margin-top:8px;"></div>
+        </div>
       </div>
     </div>
     <div class="src-panel" id="uploadPanel" style="display:none">
@@ -522,6 +530,38 @@
       allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
       setSheetStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows`);
     } catch(e) { setSheetStatus('err', 'Error: ' + e.message); allRows = null; }
+  }
+
+  function setUrlStatus(type, msg) {
+    const el = document.getElementById('urlStatus');
+    el.className = 'sheet-status';
+    if (!type) { el.innerHTML = ''; return; }
+    el.classList.add('visible', type);
+    el.innerHTML = type === 'loading' ? `<span class="spinner"></span>${msg}` : msg;
+  }
+
+  function extractSheetId(url) {
+    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : null;
+  }
+
+  async function loadFromUrl() {
+    const url = document.getElementById('sheetUrlInput').value.trim();
+    if (!url) { setUrlStatus('err', 'Please paste a Google Sheet URL.'); return; }
+    const id = extractSheetId(url);
+    if (!id) { setUrlStatus('err', 'Could not find a Sheet ID in that URL — make sure you copied the full link.'); return; }
+    if (!accessToken) { setUrlStatus('err', 'Connect your Google account first.'); return; }
+    allRows = null;
+    setUrlStatus('loading', 'Loading sheet data…');
+    try {
+      const res  = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(TARGET_TAB)}`, { headers: { Authorization: 'Bearer ' + accessToken } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Sheets API error');
+      if (!data.values || data.values.length < 2) throw new Error(`Tab "${TARGET_TAB}" is empty or not found.`);
+      const [headers, ...rows] = data.values;
+      allRows = rows.map(row => { const o = {}; headers.forEach((h,i) => { o[h] = row[i] !== undefined ? String(row[i]) : ''; }); return o; });
+      setUrlStatus('ok', `✓ Loaded ${allRows.length.toLocaleString()} rows from "${TARGET_TAB}"`);
+    } catch(e) { setUrlStatus('err', 'Error: ' + e.message); allRows = null; }
   }
 
   function signOutGoogle() {
