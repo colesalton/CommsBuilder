@@ -782,7 +782,7 @@
         const allCohorts = useDept
           ? nonvoters.filter(nv => dept && cellVal(nv,'DeptEnrolled') === dept)
           : nonvoters.filter(nv => area && cellVal(nv,'Area') === area);
-        const nvAllCohorts = allCohorts.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
+        const nvAllCohorts = allCohorts.map(nv => `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim()).join('\n');
         return [`${cellVal(voter,'FirstName')} ${cellVal(voter,'LastName')}`.trim(), superArea, useDept ? dept : area, cohort, pi, nvList, nvNamesOnly, nvAllCohorts];
       });
       // Build rows: A=Name, B=checkbox, C-I=IF formulas, J-R=hidden raw data
