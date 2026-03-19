@@ -754,8 +754,8 @@
     try {
       const DAVIS_DEPT_AREAS = new Set(['Chemistry','Biology','MSE and ChemE','Mechanical and Aerospace Engineering','Earth and Planetary Sciences']);
       const isASE = row => { const u = cellVal(row,'Unit'); return !u.includes('AR') && !u.includes('PD'); };
-      const voters    = allRows.filter(r => cellVal(r,'ASECRV26') === 'Voted');
-      const nonvoters = allRows.filter(r => cellVal(r,'Membership') === 'Y' && cellVal(r,'ASECRV26') === '' && isASE(r));
+      const voters    = allRows.filter(r => cellVal(r,'ASECRV26') === 'Voted'    && (!davisMode || cellVal(r,'SuperArea') !== 'AATC'));
+      const nonvoters = allRows.filter(r => cellVal(r,'Membership') === 'Y' && cellVal(r,'ASECRV26') === '' && isASE(r) && (!davisMode || cellVal(r,'SuperArea') !== 'AATC'));
       voters.sort((a,b) => cellVal(a,'SuperArea').localeCompare(cellVal(b,'SuperArea')));
 
       const headers = ['Full Name','Expand to see nonvoters','SuperArea','Area / DeptEnrolled','Cohort','PI','Nonvoters in Their Area'];
