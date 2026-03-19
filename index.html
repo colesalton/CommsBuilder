@@ -778,7 +778,8 @@
         }
         const nvList      = matched.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
         const nvNamesOnly = matched.map(nv => `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim()).join('\n');
-        const allCohorts  = useDept
+        // "All cohorts" = same area/dept but no cohort restriction → always >= matched
+        const allCohorts = useDept
           ? nonvoters.filter(nv => dept && cellVal(nv,'DeptEnrolled') === dept)
           : nonvoters.filter(nv => area && cellVal(nv,'Area') === area);
         const nvAllCohorts = allCohorts.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
