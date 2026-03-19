@@ -758,7 +758,7 @@
       const nonvoters = allRows.filter(r => cellVal(r,'Membership') === 'Y' && cellVal(r,'ASECRV26') === '' && isASE(r) && (!davisMode || cellVal(r,'SuperArea') !== 'AATC'));
       voters.sort((a,b) => cellVal(a,'SuperArea').localeCompare(cellVal(b,'SuperArea')));
 
-      const headers = ['Full Name','Expand to see nonvoters','SuperArea','Area / DeptEnrolled','Cohort','PI','Nonvoters in Their Area'];
+      const headers = ['Full Name','Expand to see nonvoters','SuperArea','Area / DeptEnrolled','Cohort','PI','Nonvoters in Their Area','Nonvoters (Names Only)'];
       const rawData = voters.map(voter => {
         const superArea = cellVal(voter,'SuperArea');
         const area      = cellVal(voter,'Area');
@@ -776,17 +776,18 @@
           if (area) nonvoters.filter(nv => cellVal(nv,'Area') === area).forEach(addUniq);
           if (pi)   nonvoters.filter(nv => cellVal(nv,'PI')   === pi).forEach(addUniq);
         }
-        const nvList = matched.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
-        return [`${cellVal(voter,'FirstName')} ${cellVal(voter,'LastName')}`.trim(), superArea, useDept ? dept : area, cohort, pi, nvList];
+        const nvList      = matched.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
+        const nvNamesOnly = matched.map(nv => `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim()).join('\n');
+        return [`${cellVal(voter,'FirstName')} ${cellVal(voter,'LastName')}`.trim(), superArea, useDept ? dept : area, cohort, pi, nvList, nvNamesOnly];
       });
-      // Build rows: A=Name, B=checkbox, C-G=IF formulas, H-L=hidden raw data
+      // Build rows: A=Name, B=checkbox, C-H=IF formulas, I-N=hidden raw data
       const data = rawData.map((r, i) => {
         const row = i + 2;
         return [r[0], false,
-          `=IF($B${row},H${row},"")`, `=IF($B${row},I${row},"")`,
-          `=IF($B${row},J${row},"")`, `=IF($B${row},K${row},"")`,
-          `=IF($B${row},L${row},"")`,
-          r[1], r[2], r[3], r[4], r[5]];
+          `=IF($B${row},I${row},"")`, `=IF($B${row},J${row},"")`,
+          `=IF($B${row},K${row},"")`, `=IF($B${row},L${row},"")`,
+          `=IF($B${row},M${row},"")`, `=IF($B${row},N${row},"")`,
+          r[1], r[2], r[3], r[4], r[5], r[6]];
       });
 
       const createRes  = await fetch('https://sheets.googleapis.com/v4/spreadsheets', { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ properties:{ title:"Nonvoters in voters' area" }, sheets:[{ properties:{ title:'Voters' } }] }) });
@@ -800,9 +801,9 @@
 
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ requests:[
         { setDataValidation:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:1, endColumnIndex:2 }, rule:{ condition:{ type:'BOOLEAN' }, showCustomUi:true } }},
-        { repeatCell:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:6, endColumnIndex:7 }, cell:{ userEnteredFormat:{ wrapStrategy:'WRAP' } }, fields:'userEnteredFormat.wrapStrategy' }},
+        { repeatCell:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:6, endColumnIndex:8 }, cell:{ userEnteredFormat:{ wrapStrategy:'WRAP' } }, fields:'userEnteredFormat.wrapStrategy' }},
         { updateSheetProperties:{ properties:{ sheetId:tabId, gridProperties:{ frozenRowCount:1 } }, fields:'gridProperties.frozenRowCount' }},
-        { updateDimensionProperties:{ range:{ sheetId:tabId, dimension:'COLUMNS', startIndex:7, endIndex:12 }, properties:{ hiddenByUser:true }, fields:'hiddenByUser' }}
+        { updateDimensionProperties:{ range:{ sheetId:tabId, dimension:'COLUMNS', startIndex:8, endIndex:14 }, properties:{ hiddenByUser:true }, fields:'hiddenByUser' }}
       ]})});
 
       btn.textContent = 'Generate Sheet'; btn.disabled = false;
@@ -1402,8 +1403,9 @@
     uid = uid || ('rc_' + Math.random().toString(36).slice(2));
     const card = document.createElement('div'); card.className = 'result-card';
     const cols = contact === 'Callhub' ? CALLHUB_COLS : ['FirstName', contact === 'Email' ? 'Email' : contact];
+    const csvQ = v => /[",\n\r]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v;
     const csvLines = [cols.join(',')];
-    data.forEach(r => csvLines.push(cols.map(c => `"${(r[c]||'').replace(/"/g,'""')}"`).join(',')));
+    data.forEach(r => csvLines.push(cols.map(c => csvQ(r[c]||'')).join(',')));
     const csvContent = csvLines.join('\n');
     card.dataset.csv = csvContent;
 
@@ -1473,7 +1475,7 @@
       await pushTrackerToSheets(title, rows, btn);
     } else {
       const lines = [TRACKER_HEADERS.join(','),
-        ...rows.map(r => trackerRow(r).map(v=>`"${v.replace(/"/g,'""')}"`).join(','))];
+        ...rows.map(r => trackerRow(r).map(v=> /[",\n\r]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v).join(','))];
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
       a.download = `${title.replace(/[^a-zA-Z0-9›]+/g,'_')}_tracker.csv`;
