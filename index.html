@@ -758,7 +758,7 @@
       const nonvoters = allRows.filter(r => cellVal(r,'Membership') === 'Y' && cellVal(r,'ASECRV26') === '' && isASE(r) && (!davisMode || cellVal(r,'SuperArea') !== 'AATC'));
       voters.sort((a,b) => cellVal(a,'SuperArea').localeCompare(cellVal(b,'SuperArea')));
 
-      const headers = ['Full Name','Expand to see nonvoters','SuperArea','Area / DeptEnrolled','Cohort','PI','Nonvoters in Their Area','Nonvoters (Names Only)','All Nonvoters in Area (All Cohorts)'];
+      const headers = ['Full Name','Expand to see nonvoters','SuperArea','Area / DeptEnrolled','Cohort','PI','Nonvoters in Their Area','Nonvoters (Names Only)','All Nonvoters in Area (All Cohorts)','Nonvoters in Lab','Nonvoters in Cohort'];
       const rawData = voters.map(voter => {
         const superArea = cellVal(voter,'SuperArea');
         const area      = cellVal(voter,'Area');
@@ -766,6 +766,7 @@
         const pi        = cellVal(voter,'PI');
         const dept      = cellVal(voter,'DeptEnrolled');
         const useDept   = davisMode && DAVIS_DEPT_AREAS.has(superArea);
+        const nvName = nv => `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim();
         let matched;
         if (useDept) {
           matched = nonvoters.filter(nv => dept && cellVal(nv,'DeptEnrolled') === dept && cohort && cellVal(nv,'Cohort') === cohort);
@@ -776,24 +777,31 @@
           if (area) nonvoters.filter(nv => cellVal(nv,'Area') === area).forEach(addUniq);
           if (pi)   nonvoters.filter(nv => cellVal(nv,'PI')   === pi).forEach(addUniq);
         }
-        const nvList      = matched.map(nv => { const nm = `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim(); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
-        const nvNamesOnly = matched.map(nv => `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim()).join('\n');
-        // "All cohorts" = same area/dept but no cohort restriction → always >= matched
+        const nvList      = matched.map(nv => { const nm = nvName(nv); const ph = cellVal(nv,'Cellphone'); return ph ? `${nm} (${ph})` : nm; }).join('\n');
+        const nvNamesOnly = matched.map(nvName).join('\n');
+        // All cohorts: same area/dept, no cohort restriction
         const allCohorts = useDept
           ? nonvoters.filter(nv => dept && cellVal(nv,'DeptEnrolled') === dept)
           : nonvoters.filter(nv => area && cellVal(nv,'Area') === area);
-        const nvAllCohorts = allCohorts.map(nv => `${cellVal(nv,'FirstName')} ${cellVal(nv,'LastName')}`.trim()).join('\n');
-        return [`${cellVal(voter,'FirstName')} ${cellVal(voter,'LastName')}`.trim(), superArea, useDept ? dept : area, cohort, pi, nvList, nvNamesOnly, nvAllCohorts];
+        const nvAllCohorts = allCohorts.map(nvName).join('\n');
+        // Nonvoters in Lab: same PI (names only)
+        const nvInLab = pi ? nonvoters.filter(nv => cellVal(nv,'PI') === pi).map(nvName).join('\n') : '';
+        // Nonvoters in Cohort: same area/dept AND same cohort (names only)
+        const nvInCohort = useDept
+          ? (dept && cohort ? nonvoters.filter(nv => cellVal(nv,'DeptEnrolled') === dept && cellVal(nv,'Cohort') === cohort).map(nvName).join('\n') : '')
+          : (area && cohort ? nonvoters.filter(nv => cellVal(nv,'Area') === area && cellVal(nv,'Cohort') === cohort).map(nvName).join('\n') : '');
+        return [`${cellVal(voter,'FirstName')} ${cellVal(voter,'LastName')}`.trim(), superArea, useDept ? dept : area, cohort, pi, nvList, nvNamesOnly, nvAllCohorts, nvInLab, nvInCohort];
       });
-      // Build rows: A=Name, B=checkbox, C-I=IF formulas, J-R=hidden raw data
+      // Build rows: A=Name, B=checkbox, C-K=IF formulas, L-T=hidden raw data
       const data = rawData.map((r, i) => {
         const row = i + 2;
         return [r[0], false,
-          `=IF($B${row},J${row},"")`, `=IF($B${row},K${row},"")`,
           `=IF($B${row},L${row},"")`, `=IF($B${row},M${row},"")`,
           `=IF($B${row},N${row},"")`, `=IF($B${row},O${row},"")`,
-          `=IF($B${row},P${row},"")`,
-          r[1], r[2], r[3], r[4], r[5], r[6], r[7]];
+          `=IF($B${row},P${row},"")`, `=IF($B${row},Q${row},"")`,
+          `=IF($B${row},R${row},"")`, `=IF($B${row},S${row},"")`,
+          `=IF($B${row},T${row},"")`,
+          r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9]];
       });
 
       const createRes  = await fetch('https://sheets.googleapis.com/v4/spreadsheets', { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ properties:{ title:"Nonvoters in voters' area" }, sheets:[{ properties:{ title:'Voters' } }] }) });
@@ -807,9 +815,9 @@
 
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ requests:[
         { setDataValidation:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:1, endColumnIndex:2 }, rule:{ condition:{ type:'BOOLEAN' }, showCustomUi:true } }},
-        { repeatCell:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:6, endColumnIndex:9 }, cell:{ userEnteredFormat:{ wrapStrategy:'WRAP' } }, fields:'userEnteredFormat.wrapStrategy' }},
+        { repeatCell:{ range:{ sheetId:tabId, startRowIndex:1, endRowIndex:data.length+1, startColumnIndex:6, endColumnIndex:11 }, cell:{ userEnteredFormat:{ wrapStrategy:'WRAP' } }, fields:'userEnteredFormat.wrapStrategy' }},
         { updateSheetProperties:{ properties:{ sheetId:tabId, gridProperties:{ frozenRowCount:1 } }, fields:'gridProperties.frozenRowCount' }},
-        { updateDimensionProperties:{ range:{ sheetId:tabId, dimension:'COLUMNS', startIndex:9, endIndex:16 }, properties:{ hiddenByUser:true }, fields:'hiddenByUser' }}
+        { updateDimensionProperties:{ range:{ sheetId:tabId, dimension:'COLUMNS', startIndex:11, endIndex:20 }, properties:{ hiddenByUser:true }, fields:'hiddenByUser' }}
       ]})});
 
       btn.textContent = 'Generate Sheet'; btn.disabled = false;
