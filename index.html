@@ -452,16 +452,7 @@
       <option value="PD">PD</option>
       <option value="AR">AR</option>
       <option value="PDAR">PD and AR</option>
-    </select>
-  </div>
-
-  <!-- ASECRV26 -->
-  <div class="field" id="asecrv26Field">
-    <label class="field-label" for="asecrv26">ASECRV26</label>
-    <select id="asecrv26">
-      <option value="">— Select ASECRV26 —</option>
-      <option value="blanks">(Blanks) — not yet voted</option>
-      <option value="Voted">Voted</option>
+      <option value="All">All ASEs, PDs and ARs</option>
     </select>
   </div>
 
@@ -1223,10 +1214,9 @@
   }
 
   // ── Query engine ───────────────────────────────────────────
-  function baseFilter(rows, areas, membership, unit, asecrv26) {
+  function baseFilter(rows, areas, membership, unit) {
     return rows.filter(row => {
-      const rSA = cellVal(row,'SuperArea'), rM = cellVal(row,'Membership'),
-            rU  = cellVal(row,'Unit'),      rAV = cellVal(row,'ASECRV26');
+      const rSA = cellVal(row,'SuperArea'), rM = cellVal(row,'Membership'), rU = cellVal(row,'Unit');
       if (areas && !areas.includes(rSA) && !(areas.includes('(Blank)') && rSA === '')) return false;
       if (membership === 'nonmembers') { if (rM === 'Y' || rM === 'DNC') return false; }
       else if (membership === 'alldnc') { if (rM === 'DNC') return false; }
@@ -1235,8 +1225,7 @@
       else if (unit === 'PD')   { if (!rU.includes('PD')) return false; }
       else if (unit === 'AR')   { if (!rU.includes('AR') || rU.includes('SR')) return false; }
       else if (unit === 'PDAR') { if (!rU.includes('PD') && !rU.includes('AR')) return false; }
-      if (asecrv26 === 'blanks') { if (rAV !== '') return false; }
-      else { if (rAV !== asecrv26) return false; }
+      // 'All' = no unit filter
       return true;
     });
   }
@@ -1316,9 +1305,8 @@
     if (!tutorsOnly && entries.length === 0) { showError('Please select at least one SuperArea.'); return; }
     const membership = document.getElementById('membership').value;
     const unit       = document.getElementById('unit').value;
-    const asecrv26   = document.getElementById('asecrv26').value;
     const contact    = document.querySelector('input[name="contact"]:checked').value;
-    if (!membership || !unit || !asecrv26) { showError('Please select Membership, Unit, and ASECRV26.'); return; }
+    if (!membership || !unit) { showError('Please select Membership and Unit.'); return; }
 
     const buildRow = row => contact === 'Callhub'
       ? { SuperArea: cellVal(row,'SuperArea'), Cellphone: cellVal(row,'Cellphone'), FirstName: cellVal(row,'FirstName'), LastName: cellVal(row,'LastName'), Email: cellVal(row,'Email') }
@@ -1349,13 +1337,13 @@
       const matched = applyOtherFilters(allRows.filter(row => {
         const rJT = cellVal(row,'JobTypes');
         if (!rJT.includes('Reader/Tutor')) return false;
-        return baseFilter([row], null, membership, unit, asecrv26).length > 0;
+        return baseFilter([row], null, membership, unit).length > 0;
       }));
       addCard('Tutors Only', matched);
     } else {
       entries.forEach(entry => {
         if (entry.type === 'single') {
-          const filtered = applyOtherFilters(baseFilter(allRows, [entry.area], membership, unit, asecrv26));
+          const filtered = applyOtherFilters(baseFilter(allRows, [entry.area], membership, unit));
           if (entry.subEntries.length > 0) {
             entry.subEntries.forEach(sub => {
               addCard(`${entry.area} › ${sub.subVal}`, filtered.filter(row => cellVal(row, sub.subCol) === sub.subVal));
@@ -1364,7 +1352,7 @@
             addCard(entry.area, filtered);
           }
         } else if (entry.type === 'group') {
-          addCard(entry.name, applyOtherFilters(baseFilter(allRows, entry.areas, membership, unit, asecrv26)));
+          addCard(entry.name, applyOtherFilters(baseFilter(allRows, entry.areas, membership, unit)));
         }
       });
     }
